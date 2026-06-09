@@ -24,6 +24,13 @@ class ExecResult:
     def ok(self) -> bool:
         return self.returncode == 0 and not self.timed_out
 
+    @property
+    def approval_unavailable(self) -> bool:
+        return (
+            'Tool "run_shell_command" requires user approval but cannot execute in non-interactive mode'
+            in self.output
+        )
+
 
 class GigaCodeExecutor:
     def __init__(

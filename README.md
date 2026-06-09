@@ -26,6 +26,22 @@ The empty `--prompt` flag selects non-interactive execution for the current
 GigaCode CLI, while `gigalphex` sends the generated prompt through stdin. Output
 is streamed from combined stdout/stderr back to the terminal and progress log.
 
+Observed GigaCode constraints:
+
+- GigaCode edits only inside its configured workspace. To let it work across
+  sibling project directories, pass the appropriate GigaCode
+  `--include-directories` flags through repeated `--gigacode-arg` entries or
+  `gigacode_args`.
+- GigaCode currently exposes a plain CLI invocation only. This runner does not
+  assume subcommands such as `gigacode task`, a JSON/REST API, or a Python SDK.
+- Non-interactive runs can still fail if GigaCode asks for shell approval, even
+  with `--approval-mode auto-edit`; `gigalphex` detects that warning and reports
+  it explicitly.
+- There is no `IN_PROGRESS` signal. Progress is inferred from process lifetime,
+  terminal output, and the progress log.
+- GigaCode runs on Node.js, so Node warnings such as
+  `MaxListenersExceededWarning` may appear in combined output.
+
 Run from this directory:
 
 ```bash

@@ -66,6 +66,23 @@ class FailureDescriptionTest(unittest.TestCase):
 
         self.assertEqual("gigacode review agent quality timed out after 3 attempts", message)
 
+    def test_describes_noninteractive_approval_failure(self) -> None:
+        from gigalphex.runner import describe_failure
+
+        message = describe_failure(
+            "gigacode task session",
+            ExecResult(
+                output='Warning: Tool "run_shell_command" requires user approval but cannot execute in non-interactive mode\n',
+                returncode=1,
+            ),
+        )
+
+        self.assertEqual(
+            "gigacode task session exited with status 1 "
+            "(GigaCode requested shell approval in non-interactive mode)",
+            message,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

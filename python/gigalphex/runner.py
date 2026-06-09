@@ -180,6 +180,8 @@ def describe_failure(label: str, result: ExecResult) -> str:
         parts.append("timed out")
     else:
         parts.append(f"exited with status {result.returncode}")
+    if result.approval_unavailable:
+        parts.append("(GigaCode requested shell approval in non-interactive mode)")
     if result.attempts > 1:
         parts.append(f"after {result.attempts} attempts")
     return " ".join(parts)

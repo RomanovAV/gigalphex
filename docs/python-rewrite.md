@@ -27,6 +27,26 @@ stdin. If the CLI later needs a subcommand or different flags, the executor
 boundary is `GigaCodeExecutor`, so adapting the invocation should be one local
 change.
 
+## Observed GigaCode behavior
+
+- Prompts are plain text instructions. The task prompt tells GigaCode to read a
+  markdown plan, find the first unchecked `### Task N:` or `### Iteration N:`
+  section, complete it, test it, commit it, mark checkboxes as `[x]`, and emit a
+  completion signal.
+- One task section is expected per GigaCode launch. The prompt explicitly says:
+  `Do not continue to the next task section.`
+- Workspace guard is enforced by GigaCode. Files outside its workspace cannot be
+  edited unless the GigaCode invocation includes the needed
+  `--include-directories` values.
+- Approval mode is not fully programmable in non-interactive runs. Real logs
+  show `Warning: Tool "run_shell_command" requires user approval but cannot
+  execute in non-interactive mode` even with `--approval-mode auto-edit`.
+- GigaCode appears to run on Node.js; `MaxListenersExceededWarning` can surface
+  in its output.
+- There are no observed CLI subcommands, JSON/REST API, official Python SDK, or
+  `IN_PROGRESS` signal. `gigalphex` therefore treats the CLI process and output
+  stream as the integration boundary.
+
 ## Usage
 
 Run without installing:

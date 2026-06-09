@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from gigalphex.executor import GigaCodeExecutor
+from gigalphex.executor import ExecResult, GigaCodeExecutor
 
 
 def write_script(path: Path, body: str) -> Path:
@@ -43,6 +43,14 @@ print("ok")
         executor = GigaCodeExecutor(command="gigacode")
 
         self.assertEqual("gigacode --prompt ''", executor.command_line())
+
+    def test_detects_noninteractive_approval_warning(self) -> None:
+        result = ExecResult(
+            output='Warning: Tool "run_shell_command" requires user approval but cannot execute in non-interactive mode\n',
+            returncode=1,
+        )
+
+        self.assertTrue(result.approval_unavailable)
 
     def test_retries_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
