@@ -44,7 +44,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.gigacode_command:
         cfg.gigacode_command = args.gigacode_command
     if args.gigacode_arg:
-        cfg.gigacode_args = [*(cfg.gigacode_args or []), *args.gigacode_arg]
+        cfg.gigacode_args = [*cfg.resolved_args, *args.gigacode_arg]
     if args.max_iterations is not None:
         cfg.max_iterations = args.max_iterations
     if args.review_iterations is not None:

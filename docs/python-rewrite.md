@@ -22,10 +22,10 @@
 - Docker wrapper.
 
 The Python version is intentionally small first. It launches `gigacode` in
-one-shot mode with `--prompt ""` by default and sends the generated prompt on
-stdin. If the CLI later needs a subcommand or different flags, the executor
-boundary is `GigaCodeExecutor`, so adapting the invocation should be one local
-change.
+one-shot mode with `--prompt "" --approval-mode=auto-edit` by default and sends
+the generated prompt on stdin. If the CLI later needs a subcommand or different
+flags, the executor boundary is `GigaCodeExecutor`, so adapting the invocation
+should be one local change.
 
 ## Observed GigaCode behavior
 
@@ -38,9 +38,9 @@ change.
 - Workspace guard is enforced by GigaCode. Files outside its workspace cannot be
   edited unless the GigaCode invocation includes the needed
   `--include-directories` values.
-- Approval mode is not fully programmable in non-interactive runs. Real logs
-  show `Warning: Tool "run_shell_command" requires user approval but cannot
-  execute in non-interactive mode` even with `--approval-mode auto-edit`.
+- Approval mode must be explicit in non-interactive runs. Real logs show
+  `Warning: Tool "run_shell_command" requires user approval but cannot execute
+  in non-interactive mode` and recommend `--approval-mode=auto-edit`.
 - GigaCode appears to run on Node.js; `MaxListenersExceededWarning` can surface
   in its output.
 - There are no observed CLI subcommands, JSON/REST API, official Python SDK, or
@@ -66,6 +66,6 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --prompt ""
+gigacode_args = --prompt "" --approval-mode=auto-edit
 default_branch = main
 ```

@@ -9,6 +9,7 @@ import threading
 import time
 from typing import Callable, Optional
 
+from .defaults import DEFAULT_GIGACODE_ARGS
 from .signals import detect_signal
 
 
@@ -44,7 +45,7 @@ class GigaCodeExecutor:
         output: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.command = command
-        self.args = args if args is not None else ["--prompt", ""]
+        self.args = args if args is not None else DEFAULT_GIGACODE_ARGS.copy()
         self.timeout = timeout
         self.retry_count = max(0, retry_count)
         self.retry_delay = max(0.0, retry_delay)

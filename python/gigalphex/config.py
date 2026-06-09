@@ -7,6 +7,8 @@ import os
 import shlex
 from typing import Optional
 
+from .defaults import DEFAULT_GIGACODE_ARGS
+
 
 @dataclass
 class Config:
@@ -28,7 +30,7 @@ class Config:
 
     @property
     def resolved_args(self) -> list[str]:
-        return self.gigacode_args if self.gigacode_args is not None else ["--prompt", ""]
+        return self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS.copy()
 
 
 def load_config(path: Optional[Path] = None) -> Config:
