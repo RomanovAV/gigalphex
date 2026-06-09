@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import stat
 import sys
 import tempfile
@@ -17,6 +18,32 @@ def write_script(path: Path, body: str) -> Path:
 
 
 class ExecutorTest(unittest.TestCase):
+    def test_default_gigacode_args_force_one_shot_prompt_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_file = Path(tmp) / "capture.json"
+            script = write_script(
+                Path(tmp) / "capture.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import json
+import sys
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
+print("ok")
+""",
+            )
+
+            result = GigaCodeExecutor(command=str(script), output=lambda _line: None).run("prompt body")
+            captured = json.loads(output_file.read_text(encoding="utf-8"))
+
+            self.assertTrue(result.ok)
+            self.assertEqual(["--prompt", ""], captured["argv"])
+            self.assertEqual("prompt body", captured["stdin"])
+
+    def test_command_line_quotes_empty_prompt_arg(self) -> None:
+        executor = GigaCodeExecutor(command="gigacode")
+
+        self.assertEqual("gigacode --prompt ''", executor.command_line())
+
     def test_retries_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

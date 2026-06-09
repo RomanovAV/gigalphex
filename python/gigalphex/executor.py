@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
+import shlex
 import sys
 import threading
 import time
@@ -36,7 +37,7 @@ class GigaCodeExecutor:
         output: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.command = command
-        self.args = args or []
+        self.args = args if args is not None else ["--prompt", ""]
         self.timeout = timeout
         self.retry_count = max(0, retry_count)
         self.retry_delay = max(0.0, retry_delay)
@@ -61,7 +62,7 @@ class GigaCodeExecutor:
         return results
 
     def command_line(self) -> str:
-        return " ".join([self.command, *self.args])
+        return shlex.join([self.command, *self.args])
 
     def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         attempts = self.retry_count + 1

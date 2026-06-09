@@ -21,10 +21,11 @@
 - External second-model review.
 - Docker wrapper.
 
-The Python version is intentionally small first. For now it assumes `gigacode`
-is launched as a plain terminal command and receives the prompt on stdin. If the
-real CLI later needs a subcommand or flags, the executor boundary is
-`GigaCodeExecutor`, so adapting the invocation should be one local change.
+The Python version is intentionally small first. It launches `gigacode` in
+one-shot mode with `--prompt ""` by default and sends the generated prompt on
+stdin. If the CLI later needs a subcommand or different flags, the executor
+boundary is `GigaCodeExecutor`, so adapting the invocation should be one local
+change.
 
 ## Usage
 
@@ -45,6 +46,6 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --some --flags
+gigacode_args = --prompt ""
 default_branch = main
 ```

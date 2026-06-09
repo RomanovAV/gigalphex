@@ -15,15 +15,16 @@ This is a small standalone rewrite of the useful ralphex core:
 - move completed plans into `completed/`
 - call `gigacode` through a configurable CLI boundary
 
-Current assumption: GigaCode CLI is available in `PATH` and starts with a plain
-terminal command:
+Current assumption: GigaCode CLI is available in `PATH`. By default
+`gigalphex` starts it in one-shot mode with:
 
 ```bash
-gigacode
+gigacode --prompt ''
 ```
 
-`gigalphex` sends the generated prompt to that process through stdin and streams
-combined stdout/stderr back to the terminal and progress log.
+The empty `--prompt` flag selects non-interactive execution for the current
+GigaCode CLI, while `gigalphex` sends the generated prompt through stdin. Output
+is streamed from combined stdout/stderr back to the terminal and progress log.
 
 Run from this directory:
 
@@ -52,7 +53,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --some --flags
+gigacode_args = --prompt ""
 default_branch = main
 session_timeout = 1800
 retry_count = 1

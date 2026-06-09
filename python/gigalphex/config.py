@@ -28,7 +28,7 @@ class Config:
 
     @property
     def resolved_args(self) -> list[str]:
-        return self.gigacode_args if self.gigacode_args is not None else []
+        return self.gigacode_args if self.gigacode_args is not None else ["--prompt", ""]
 
 
 def load_config(path: Optional[Path] = None) -> Config:
