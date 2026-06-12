@@ -36,13 +36,31 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["--prompt", "", "--approval-mode=auto-edit"], captured["argv"])
+            self.assertEqual(["-p", "", "--approval-mode=auto-edit"], captured["argv"])
             self.assertEqual("prompt body", captured["stdin"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
 
-        self.assertEqual("gigacode --prompt '' --approval-mode=auto-edit", executor.command_line())
+        self.assertEqual("gigacode -p '' --approval-mode=auto-edit", executor.command_line())
+
+    def test_adds_trailing_newline_to_streamed_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "no_newline.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+sys.stdout.write("no newline")
+""",
+            )
+            chunks = []
+
+            result = GigaCodeExecutor(command=str(script), output=chunks.append).run("prompt")
+
+            self.assertTrue(result.ok)
+            self.assertEqual("no newline\n", result.output)
+            self.assertEqual(["no newline", "\n"], chunks)
 
     def test_detects_noninteractive_approval_warning(self) -> None:
         result = ExecResult(

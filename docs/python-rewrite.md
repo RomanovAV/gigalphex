@@ -24,7 +24,7 @@
 - Docker wrapper.
 
 The Python version is intentionally small first. It launches `gigacode` in
-one-shot mode with `--prompt "" --approval-mode=auto-edit` by default and sends
+one-shot mode with `-p "" --approval-mode=auto-edit` by default and sends
 the generated prompt on stdin. If the CLI later needs a subcommand or different
 flags, the executor boundary is `GigaCodeExecutor`, so adapting the invocation
 should be one local change.
@@ -68,7 +68,7 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --prompt "" --approval-mode=auto-edit
+gigacode_args = -p "" --approval-mode=auto-edit
 default_branch = main
 ```
 

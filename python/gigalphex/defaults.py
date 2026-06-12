@@ -1,1 +1,1 @@
-DEFAULT_GIGACODE_ARGS = ["--prompt", "", "--approval-mode=auto-edit"]
+DEFAULT_GIGACODE_ARGS = ["-p", "", "--approval-mode=auto-edit"]

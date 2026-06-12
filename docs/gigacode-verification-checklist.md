@@ -23,9 +23,10 @@ Notes:
 
 ## 2. Run Unit Tests
 
-From the repository root:
+From the repository root, not from `/tmp`:
 
 ```bash
+cd /path/to/gigalphex
 PYTHONPATH=python python3 -m unittest discover -s tests
 ```
 
@@ -71,6 +72,7 @@ Notes:
 From the repository root:
 
 ```bash
+cd /path/to/gigalphex
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint" --dry-run
 ```
 
@@ -91,6 +93,7 @@ Notes:
 From the repository root:
 
 ```bash
+cd /path/to/gigalphex
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
 ```
 
@@ -133,6 +136,7 @@ Notes:
 From the repository root:
 
 ```bash
+cd /path/to/gigalphex
 PYTHONPATH=python python3 -m gigalphex.cli --init
 printf 'CUSTOM PLAN PROMPT: {plan_request}\n' > .gigalphex/prompts/make_plan.txt
 PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --dry-run
@@ -174,6 +178,7 @@ This checks that gigalphex can run GigaCode non-interactively.
 Run:
 
 ```bash
+cd /path/to/gigalphex
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/20260612-smoke.md --allow-dirty --tasks-only --no-move-plan
 ```
 

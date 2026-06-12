@@ -138,6 +138,10 @@ class GigaCodeExecutor:
                 timer.cancel()
             proc.stdout.close()
 
+        if chunks and not chunks[-1].endswith("\n"):
+            chunks.append("\n")
+            output("\n")
+
         text = "".join(chunks)
         return ExecResult(output=text, signal=detect_signal(text), returncode=returncode, timed_out=timed_out)
 

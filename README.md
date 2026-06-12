@@ -19,11 +19,11 @@ Current assumption: GigaCode CLI is available in `PATH`. By default
 `gigalphex` starts it in one-shot mode with:
 
 ```bash
-gigacode --prompt '' --approval-mode=auto-edit
+gigacode -p '' --approval-mode=auto-edit
 ```
 
-The empty `--prompt` flag selects non-interactive execution for the current
-GigaCode CLI, while `gigalphex` sends the generated prompt through stdin.
+The empty `-p` flag selects non-interactive execution for the current GigaCode
+CLI, while `gigalphex` sends the generated prompt through stdin.
 `--approval-mode=auto-edit` enables automatic shell/tool execution for
 non-interactive runs. Output is streamed from combined stdout/stderr back to the
 terminal and progress log.
@@ -83,7 +83,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --prompt "" --approval-mode=auto-edit
+gigacode_args = -p "" --approval-mode=auto-edit
 default_branch = main
 prompts_dir = .gigalphex/prompts
 session_timeout = 1800
