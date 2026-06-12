@@ -62,6 +62,10 @@ Initialize local project config and editable prompt templates:
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
+If you skip `--init`, the first real plan execution initializes the local
+`.gigalphex/config` and prompt templates automatically. Dry runs, plan creation,
+and review-only runs do not auto-create these files.
+
 Create a new executable plan:
 
 ```bash

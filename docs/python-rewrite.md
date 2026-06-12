@@ -13,7 +13,8 @@
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
 - Select GigaCode models per phase with `plan_model`, `task_model`,
   `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.
-- Initialize local `.gigalphex/` config and editable prompt templates.
+- Initialize local `.gigalphex/` config and editable prompt templates, including
+  automatic initialization on first real plan execution.
 - Bound executor runs with session timeout, retry count, retry delay, and review worker limit.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
 

@@ -45,6 +45,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def should_auto_init(args: argparse.Namespace) -> bool:
+    return bool(
+        args.plan_file
+        and not args.plan
+        and not args.review
+        and not args.dry_run
+        and args.config is None
+        and Path(args.plan_file).exists()
+        and not Path(".gigalphex/config").exists()
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if args.init:
@@ -56,6 +68,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             print("gigalphex config already initialized")
         return 0
+
+    if should_auto_init(args):
+        written = init_project_config()
+        if written:
+            print(f"initialized local gigalphex config: {Path('.gigalphex/config')}")
 
     cfg = load_config(args.config)
     prompts = load_prompt_templates(cfg.prompt_dirs)
