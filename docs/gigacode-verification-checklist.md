@@ -3,6 +3,34 @@
 Use this checklist on a machine where `gigacode` is installed. Add notes,
 outputs, and failures under each section as you test.
 
+## Historical Baseline
+
+These checks passed in prior verification runs with GigaCode `26.5.17`:
+
+- `gigacode` is available at `/Users/19268765/.gigacode/bin/gigacode`.
+- Unit tests passed from the repository root: `19/19`, then `20/20` after the
+  prompt-placeholder fix.
+- `--init` created config and all prompt templates.
+- `--plan --dry-run` printed the plan-generation prompt and did not invoke
+  `gigacode`.
+- Real `--plan` created markdown plans under `docs/plans/`.
+- Generated plans were not wrapped in markdown code fences.
+- Repeated `--plan` did not overwrite the first file; it created `-2.md`.
+- Custom `.gigalphex/prompts/make_plan.txt` overrode the embedded prompt.
+- The previous newline fix worked: `created plan:` and `progress log:` no
+  longer stick to the last line of GigaCode output.
+
+The unresolved item was small task execution: when the prompt was sent through
+stdin, GigaCode still warned that `run_shell_command` needed approval and the
+task failed before commit. The current code now passes the generated prompt via
+`-p {prompt}` by default, so the main retest is whether auto-edit shell
+execution and commit now work.
+
+## Current Retest Scope
+
+Run these checks after updating to the latest code. The first two are quick
+sanity checks; the third is the real regression test.
+
 ## 1. Check GigaCode Availability
 
 ```bash
@@ -21,7 +49,7 @@ Notes:
 
 ```
 
-## 2. Run Unit Tests
+## 2. Run Unit Tests From Repository Root
 
 From the repository root, not from `/tmp`:
 
@@ -40,120 +68,23 @@ Notes:
 
 ```
 
-## 3. Verify `--init` in a Clean Directory
+## 3. Verify Small Task Execution With `-p {prompt}`
+
+Use a clean temporary git repository so the smoke test cannot disturb real work:
 
 ```bash
-mkdir -p /tmp/gigalphex-init-check
-cd /tmp/gigalphex-init-check
-PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init
-find .gigalphex -type f | sort
+mkdir -p /tmp/gigalphex-task-check
+cd /tmp/gigalphex-task-check
+git init
+git config user.email "test@example.com"
+git config user.name "GigaLphex Test"
+mkdir -p docs/plans
+cat > README.md <<'EOF'
+# Smoke Repo
+EOF
+git add README.md
+git commit -m "initial commit"
 ```
-
-Expected files:
-
-```text
-.gigalphex/config
-.gigalphex/prompts/finalize.txt
-.gigalphex/prompts/make_plan.txt
-.gigalphex/prompts/review.txt
-.gigalphex/prompts/review_agent.txt
-.gigalphex/prompts/review_synthesis.txt
-.gigalphex/prompts/task.txt
-```
-
-Notes:
-
-```text
-
-```
-
-## 4. Verify `--plan --dry-run`
-
-From the repository root:
-
-```bash
-cd /path/to/gigalphex
-PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint" --dry-run
-```
-
-Expected:
-
-- Prints the plan-generation prompt.
-- Does not invoke `gigacode`.
-- Prints `progress log: .gigalphex/progress/progress-plan.txt`.
-
-Notes:
-
-```text
-
-```
-
-## 5. Verify Real Plan Generation
-
-From the repository root:
-
-```bash
-cd /path/to/gigalphex
-PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
-```
-
-Expected:
-
-- Creates a file like `docs/plans/YYYYMMDD-add-health-check-endpoint.md`.
-- The file contains a markdown plan.
-- The plan includes `# Plan:`, `## Overview`, `## Context`, and at least one `### Task 1:` section.
-- Task items use checkbox format: `- [ ] ...`.
-- The saved file does not wrap the whole plan in markdown code fences.
-
-Notes:
-
-```text
-
-```
-
-## 6. Verify Repeated Plan Generation Does Not Overwrite
-
-Run the same command again:
-
-```bash
-PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
-```
-
-Expected:
-
-- Creates a second file with a numeric suffix, such as
-  `docs/plans/YYYYMMDD-add-health-check-endpoint-2.md`.
-- The first generated plan remains unchanged.
-
-Notes:
-
-```text
-
-```
-
-## 7. Verify Custom `make_plan.txt`
-
-From the repository root:
-
-```bash
-cd /path/to/gigalphex
-PYTHONPATH=python python3 -m gigalphex.cli --init
-printf 'CUSTOM PLAN PROMPT: {plan_request}\n' > .gigalphex/prompts/make_plan.txt
-PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --dry-run
-```
-
-Expected:
-
-- Output contains `CUSTOM PLAN PROMPT: demo request`.
-- This confirms local prompt templates override embedded defaults.
-
-Notes:
-
-```text
-
-```
-
-## 8. Verify Small Task Execution
 
 Create `docs/plans/20260612-smoke.md`:
 
@@ -178,16 +109,133 @@ This checks that gigalphex can run GigaCode non-interactively.
 Run:
 
 ```bash
-cd /path/to/gigalphex
-PYTHONPATH=python python3 -m gigalphex.cli docs/plans/20260612-smoke.md --allow-dirty --tasks-only --no-move-plan
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli docs/plans/20260612-smoke.md --allow-dirty --tasks-only --no-move-plan
 ```
 
 Expected:
 
-- `SMOKE_TEST.md` is created.
+- No warning like `Tool "run_shell_command" requires user approval`.
+- The startup section logs `gigacode -p '<prompt>' --approval-mode=auto-edit`,
+  not the full prompt text.
+- `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
-- A commit is created.
-- A progress log appears under `.gigalphex/progress/`.
+- A new commit is created after `initial commit`.
+- The command exits successfully and prints `progress log: ...`.
+- The progress log contains `<<<RALPHEX:ALL_TASKS_DONE>>>` or a clear success
+  path, not `<<<RALPHEX:TASK_FAILED>>>`.
+
+Collect:
+
+```bash
+git log --oneline --decorate -5
+git status --short
+cat docs/plans/20260612-smoke.md
+cat SMOKE_TEST.md
+cat .gigalphex/progress/progress-20260612-smoke.txt
+```
+
+Notes:
+
+```text
+
+```
+
+## Optional Regression Checks
+
+The following already passed historically. Re-run only if related code changed.
+
+## 4. Verify `--init` in a Clean Directory
+
+```bash
+mkdir -p /tmp/gigalphex-init-check
+cd /tmp/gigalphex-init-check
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init
+find .gigalphex -type f | sort
+```
+
+Expected files:
+
+```text
+.gigalphex/config
+.gigalphex/prompts/finalize.txt
+.gigalphex/prompts/make_plan.txt
+.gigalphex/prompts/review.txt
+.gigalphex/prompts/review_agent.txt
+.gigalphex/prompts/review_synthesis.txt
+.gigalphex/prompts/task.txt
+```
+
+## 5. Verify `--plan --dry-run`
+
+```bash
+cd /path/to/gigalphex
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint" --dry-run
+```
+
+Expected:
+
+- Prints the plan-generation prompt.
+- Does not invoke `gigacode`.
+- Prints `progress log: .gigalphex/progress/progress-plan.txt`.
+
+## 6. Verify Real Plan Generation
+
+From the repository root:
+
+```bash
+cd /path/to/gigalphex
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
+```
+
+Expected:
+
+- Creates a file like `docs/plans/YYYYMMDD-add-health-check-endpoint.md`.
+- The file contains a markdown plan.
+- The plan includes `# Plan:`, `## Overview`, `## Context`, and at least one `### Task 1:` section.
+- Task items use checkbox format: `- [ ] ...`.
+- The saved file does not wrap the whole plan in markdown code fences.
+
+Notes:
+
+```text
+
+```
+
+## 7. Verify Repeated Plan Generation Does Not Overwrite
+
+Run the same command again:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
+```
+
+Expected:
+
+- Creates a second file with a numeric suffix, such as
+  `docs/plans/YYYYMMDD-add-health-check-endpoint-2.md`.
+- The first generated plan remains unchanged.
+
+Notes:
+
+```text
+
+```
+
+## 8. Verify Custom `make_plan.txt`
+
+From the repository root:
+
+```bash
+cd /path/to/gigalphex
+PYTHONPATH=python python3 -m gigalphex.cli --init
+printf 'CUSTOM PLAN PROMPT: {plan_request}\n' > .gigalphex/prompts/make_plan.txt
+PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --dry-run
+```
+
+Expected:
+
+- Output contains `CUSTOM PLAN PROMPT: demo request`.
+- This confirms local prompt templates override embedded defaults.
 
 Notes:
 
@@ -197,7 +245,7 @@ Notes:
 
 ## Things to Watch Closely
 
-- Does `gigacode` accept prompts through stdin?
+- Does `gigacode` accept the generated prompt through `-p {prompt}`?
 - Does `--approval-mode=auto-edit` avoid non-interactive approval failures?
 - Does any run hang without output?
 - Does generated markdown contain extra commentary or code fences?

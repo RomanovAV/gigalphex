@@ -84,7 +84,7 @@ def _apply_env(cfg: Config) -> Config:
 
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
-# gigacode_args = -p "" --approval-mode=auto-edit
+# gigacode_args = -p {prompt} --approval-mode=auto-edit
 # plans_dir = docs/plans
 # progress_dir = .gigalphex/progress
 # prompts_dir = .gigalphex/prompts

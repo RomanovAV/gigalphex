@@ -70,7 +70,8 @@ class GigaCodeExecutor:
         return results
 
     def command_line(self) -> str:
-        return shlex.join([self.command, *self.args])
+        safe_args = ["<prompt>" if arg == "{prompt}" else arg for arg in self.args]
+        return shlex.join([self.command, *safe_args])
 
     def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         attempts = self.retry_count + 1
@@ -92,7 +93,7 @@ class GigaCodeExecutor:
         return self._run(prompt, output)
 
     def _run(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
-        argv = [self.command, *self.args]
+        argv, stdin_prompt = self._build_invocation(prompt)
         try:
             proc = subprocess.Popen(
                 argv,
@@ -108,7 +109,7 @@ class GigaCodeExecutor:
 
         assert proc.stdin is not None
         assert proc.stdout is not None
-        proc.stdin.write(prompt)
+        proc.stdin.write(stdin_prompt)
         proc.stdin.close()
 
         chunks: list[str] = []
@@ -144,6 +145,17 @@ class GigaCodeExecutor:
 
         text = "".join(chunks)
         return ExecResult(output=text, signal=detect_signal(text), returncode=returncode, timed_out=timed_out)
+
+    def _build_invocation(self, prompt: str) -> tuple[list[str], str]:
+        used_placeholder = False
+        args: list[str] = []
+        for arg in self.args:
+            if arg == "{prompt}":
+                args.append(prompt)
+                used_placeholder = True
+            else:
+                args.append(arg)
+        return [self.command, *args], "" if used_placeholder else prompt
 
 
 class DryRunExecutor:

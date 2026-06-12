@@ -36,13 +36,34 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["-p", "", "--approval-mode=auto-edit"], captured["argv"])
-            self.assertEqual("prompt body", captured["stdin"])
+            self.assertEqual(["-p", "prompt body", "--approval-mode=auto-edit"], captured["argv"])
+            self.assertEqual("", captured["stdin"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
 
-        self.assertEqual("gigacode -p '' --approval-mode=auto-edit", executor.command_line())
+        self.assertEqual("gigacode -p '<prompt>' --approval-mode=auto-edit", executor.command_line())
+
+    def test_custom_args_without_prompt_placeholder_use_stdin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_file = Path(tmp) / "capture.json"
+            script = write_script(
+                Path(tmp) / "capture.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import json
+import sys
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
+print("ok")
+""",
+            )
+
+            result = GigaCodeExecutor(command=str(script), args=["--plain"], output=lambda _line: None).run("prompt body")
+            captured = json.loads(output_file.read_text(encoding="utf-8"))
+
+            self.assertTrue(result.ok)
+            self.assertEqual(["--plain"], captured["argv"])
+            self.assertEqual("prompt body", captured["stdin"])
 
     def test_adds_trailing_newline_to_streamed_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
