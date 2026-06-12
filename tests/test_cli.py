@@ -41,7 +41,7 @@ class CliTest(unittest.TestCase):
                 """#!/usr/bin/env python3
 import sys
 sys.stdin.read()
-print("<<<RALPHEX:ALL_TASKS_DONE>>>")
+print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
 """,
             )
             plan = tmp_path / "docs/plans/20260612-smoke.md"

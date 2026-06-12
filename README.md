@@ -7,7 +7,7 @@ This is a small standalone rewrite of the useful ralphex core:
 - parse markdown plans with `### Task N:` / `### Iteration N:`
 - run one task section per agent iteration
 - stream output to terminal and progress logs
-- detect ralphex-compatible completion signals
+- detect gigalphex completion signals
 - run review and optional finalize loops
 - run five specialist review agents in parallel, then synthesize/fix findings
 - create/switch a git branch from the plan filename

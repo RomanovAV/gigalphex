@@ -22,7 +22,7 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 - Small task execution passed end-to-end on 2026-06-12 with the default
   `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`
   invocation. GigaCode created `SMOKE_TEST.md`, marked the task checkboxes,
-  committed the changes, and emitted `<<<RALPHEX:ALL_TASKS_DONE>>>`.
+  committed the changes, and emitted the completion signal.
 
 The formerly unresolved item was small task execution. When the prompt was sent
 through stdin, GigaCode warned that `run_shell_command` needed approval and the
@@ -129,8 +129,8 @@ Expected:
 - The checkbox in the plan is marked `[x]`.
 - A new commit is created after `initial commit`.
 - The command exits successfully and prints `progress log: ...`.
-- The progress log contains `<<<RALPHEX:ALL_TASKS_DONE>>>` or a clear success
-  path, not `<<<RALPHEX:TASK_FAILED>>>`.
+- The progress log contains `<<<GIGALPHEX:ALL_TASKS_DONE>>>` or a clear success
+  path, not `<<<GIGALPHEX:TASK_FAILED>>>`.
 
 Collect:
 
@@ -158,7 +158,7 @@ Observed:
 - Created commits:
   81796c9 feat: mark smoke-task checkboxes complete
   e84517b feat: add smoke-test artifact
-- Emitted <<<RALPHEX:ALL_TASKS_DONE>>> and exited successfully.
+- Emitted the completion signal and exited successfully.
 - Left only untracked .gigalphex/ progress files in the smoke repository.
 ```
 

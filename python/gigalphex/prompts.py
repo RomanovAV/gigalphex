@@ -42,10 +42,10 @@ Only mark a checkbox as [x] after that exact item is complete. If a checkbox ask
 for a commit, leave it unchecked unless `git commit` succeeds.
 
 If no unchecked Task/Iteration checkboxes remain, output exactly:
-<<<RALPHEX:ALL_TASKS_DONE>>>
+<<<GIGALPHEX:ALL_TASKS_DONE>>>
 
 If the task cannot be completed after reasonable fixes, output exactly:
-<<<RALPHEX:TASK_FAILED>>>
+<<<GIGALPHEX:TASK_FAILED>>>
 
 Progress log: {progress_file}
 Default branch: {default_branch}
@@ -57,7 +57,7 @@ MAKE_PLAN_PROMPT = """Create an implementation plan for this request:
 
 {plan_request}
 
-Write a ralphex-compatible markdown plan. The plan must be directly executable by an autonomous coding agent.
+Write a gigalphex-compatible markdown plan. The plan must be directly executable by an autonomous coding agent.
 
 Required format:
 
@@ -106,7 +106,7 @@ If confirmed issues exist:
 - stop without a completion signal
 
 If no confirmed issues exist, output exactly:
-<<<RALPHEX:REVIEW_DONE>>>
+<<<GIGALPHEX:REVIEW_DONE>>>
 
 Progress log: {progress_file}
 Plain text output only.
@@ -148,7 +148,7 @@ If confirmed issues exist:
 - stop without a completion signal
 
 If no confirmed issues exist, output exactly:
-<<<RALPHEX:REVIEW_DONE>>>
+<<<GIGALPHEX:REVIEW_DONE>>>
 
 Reject false positives explicitly and briefly.
 Progress log: {progress_file}

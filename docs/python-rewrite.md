@@ -3,10 +3,10 @@
 ## Core functions preserved
 
 - Parse markdown plans with `### Task N:` / `### Iteration N:` sections and actionable checkboxes.
-- Create ralphex-compatible plans from a free-form request.
+- Create gigalphex-compatible plans from a free-form request.
 - Run one task section per agent iteration.
 - Stream agent output to terminal and a progress log.
-- Detect ralphex-compatible completion signals.
+- Detect gigalphex completion signals.
 - Run a review loop after tasks.
 - Run five specialist review agents in parallel, then synthesize/fix findings.
 - Optionally run a finalize prompt.
