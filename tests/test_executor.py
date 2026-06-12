@@ -36,13 +36,19 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["-p", "prompt body", "--approval-mode=auto-edit"], captured["argv"])
+            self.assertEqual(
+                ["-p", "prompt body", "--approval-mode=auto-edit", "--allowed-tools", "run_shell_command"],
+                captured["argv"],
+            )
             self.assertEqual("", captured["stdin"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
 
-        self.assertEqual("gigacode -p '<prompt>' --approval-mode=auto-edit", executor.command_line())
+        self.assertEqual(
+            "gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command",
+            executor.command_line(),
+        )
 
     def test_custom_args_without_prompt_placeholder_use_stdin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

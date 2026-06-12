@@ -24,8 +24,11 @@
 - Docker wrapper.
 
 The Python version is intentionally small first. It launches `gigacode` in
-one-shot mode with `-p {prompt} --approval-mode=auto-edit` by default and
-substitutes the generated prompt into `{prompt}` before invoking GigaCode. If
+one-shot mode with
+`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command` by
+default and substitutes the generated prompt into `{prompt}` before invoking
+GigaCode. GigaCode 26.5.17 needs `--allowed-tools run_shell_command` for tests
+and git commands; `--approval-mode=auto-edit` only covers edit/write tools. If
 custom args omit `{prompt}`, the executor falls back to sending the generated
 prompt on stdin. If the CLI later needs a subcommand or different flags, the
 executor boundary is `GigaCodeExecutor`, so adapting the invocation should be
@@ -44,7 +47,8 @@ one local change.
   `--include-directories` values.
 - Approval mode must be explicit in non-interactive runs. Real logs show
   `Warning: Tool "run_shell_command" requires user approval but cannot execute
-  in non-interactive mode` and recommend `--approval-mode=auto-edit`.
+  in non-interactive mode`; GigaCode help shows that shell execution additionally
+  requires `--allowed-tools run_shell_command`.
 - GigaCode appears to run on Node.js; `MaxListenersExceededWarning` can surface
   in its output.
 - There are no observed CLI subcommands, JSON/REST API, official Python SDK, or
@@ -70,7 +74,7 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit
+gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
 default_branch = main
 ```
 

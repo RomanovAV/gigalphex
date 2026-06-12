@@ -22,9 +22,14 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 
 The unresolved item was small task execution: when the prompt was sent through
 stdin, GigaCode still warned that `run_shell_command` needed approval and the
-task failed before commit. The current code now passes the generated prompt via
-`-p {prompt}` by default, so the main retest is whether auto-edit shell
-execution and commit now work.
+task failed before commit. Passing the prompt through `-p {prompt}` fixed the
+invocation shape but did not allow shell commands by itself. GigaCode help for
+26.5.17 says `--approval-mode=auto-edit` allows edit/write tools, while shell
+commands require `--allowed-tools run_shell_command`. A manual command using
+`gigacode -p '...' --approval-mode=auto-edit --allowed-tools run_shell_command`
+successfully created a commit. The current code now includes that full default,
+so the main retest is whether autonomous task execution can commit without a
+manual follow-up.
 
 ## Current Retest Scope
 
@@ -68,7 +73,7 @@ Notes:
 
 ```
 
-## 3. Verify Small Task Execution With `-p {prompt}`
+## 3. Verify Small Task Execution With Shell Tool Allowed
 
 Use a clean temporary git repository so the smoke test cannot disturb real work:
 
@@ -115,7 +120,8 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli docs/plans/2026061
 Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
-- The startup section logs `gigacode -p '<prompt>' --approval-mode=auto-edit`,
+- The startup section logs
+  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
@@ -246,7 +252,8 @@ Notes:
 ## Things to Watch Closely
 
 - Does `gigacode` accept the generated prompt through `-p {prompt}`?
-- Does `--approval-mode=auto-edit` avoid non-interactive approval failures?
+- Does `--approval-mode=auto-edit --allowed-tools run_shell_command` avoid
+  non-interactive approval failures?
 - Does any run hang without output?
 - Does generated markdown contain extra commentary or code fences?
 - Does task execution emit one of the expected signals when done?

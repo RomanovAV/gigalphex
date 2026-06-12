@@ -38,6 +38,9 @@ Complete exactly one Task/Iteration section per run:
 - mark completed checkboxes as [x]
 - commit code and plan updates with message: feat: <brief task description>
 
+Only mark a checkbox as [x] after that exact item is complete. If a checkbox asks
+for a commit, leave it unchecked unless `git commit` succeeds.
+
 If no unchecked Task/Iteration checkboxes remain, output exactly:
 <<<RALPHEX:ALL_TASKS_DONE>>>
 

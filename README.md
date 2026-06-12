@@ -19,16 +19,17 @@ Current assumption: GigaCode CLI is available in `PATH`. By default
 `gigalphex` starts it in one-shot mode with:
 
 ```bash
-gigacode -p '<generated prompt>' --approval-mode=auto-edit
+gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
 ```
 
-The default argument template is `-p {prompt} --approval-mode=auto-edit`.
+The default argument template is
+`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
 GigaCode. If custom `gigacode_args` do not include `{prompt}`, the prompt is
-sent through stdin instead.
-`--approval-mode=auto-edit` enables automatic shell/tool execution for
-non-interactive runs. Output is streamed from combined stdout/stderr back to the
-terminal and progress log.
+sent through stdin instead. In GigaCode 26.5.17, `--approval-mode=auto-edit`
+allows edit/write tools, while shell commands such as tests and `git commit`
+also require `--allowed-tools run_shell_command`. Output is streamed from
+combined stdout/stderr back to the terminal and progress log.
 
 Observed GigaCode constraints:
 
@@ -38,9 +39,11 @@ Observed GigaCode constraints:
   `gigacode_args`.
 - GigaCode currently exposes a plain CLI invocation only. This runner does not
   assume subcommands such as `gigacode task`, a JSON/REST API, or a Python SDK.
-- Non-interactive runs fail if GigaCode asks for shell approval without
-  automatic approval enabled. Real logs recommend `--approval-mode=auto-edit`;
-  `gigalphex` includes it by default and still detects the warning if it appears.
+- Non-interactive runs fail if GigaCode asks for shell approval without the
+  shell tool being explicitly allowed. Real logs and GigaCode help indicate that
+  `--approval-mode=auto-edit` must be paired with
+  `--allowed-tools run_shell_command`; `gigalphex` includes both by default and
+  still detects the warning if it appears.
 - There is no `IN_PROGRESS` signal. Progress is inferred from process lifetime,
   terminal output, and the progress log.
 - GigaCode runs on Node.js, so Node warnings such as
@@ -85,7 +88,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit
+gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
 default_branch = main
 prompts_dir = .gigalphex/prompts
 session_timeout = 1800

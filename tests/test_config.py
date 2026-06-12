@@ -10,7 +10,7 @@ from gigalphex.config import Config
 class ConfigTest(unittest.TestCase):
     def test_default_args_enable_noninteractive_auto_edit(self) -> None:
         self.assertEqual(
-            ["-p", "{prompt}", "--approval-mode=auto-edit"],
+            ["-p", "{prompt}", "--approval-mode=auto-edit", "--allowed-tools", "run_shell_command"],
             Config().resolved_args,
         )
 
@@ -19,7 +19,7 @@ class ConfigTest(unittest.TestCase):
         first.append("--include-directories")
 
         self.assertEqual(
-            ["-p", "{prompt}", "--approval-mode=auto-edit"],
+            ["-p", "{prompt}", "--approval-mode=auto-edit", "--allowed-tools", "run_shell_command"],
             Config().resolved_args,
         )
 
