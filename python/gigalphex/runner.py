@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import time
 from typing import Optional
@@ -9,14 +9,13 @@ from .executor import ExecResult, GigaCodeExecutor
 from .plan import file_has_uncompleted_checkbox, parse_plan_file
 from .progress import ProgressLog
 from .prompts import (
-    FINALIZE_PROMPT,
+    DEFAULT_PROMPTS,
     REVIEW_AGENTS,
-    REVIEW_PROMPT,
-    TASK_PROMPT,
     PromptContext,
+    PromptTemplates,
     render,
-    render_review_agent,
-    render_review_synthesis,
+    render_review_agent_prompt,
+    render_review_synthesis_prompt,
 )
 from .signals import ALL_TASKS_DONE, REVIEW_DONE, TASK_FAILED
 
@@ -34,6 +33,7 @@ class RunOptions:
     dry_run: bool = False
     parallel_review: bool = True
     delay_seconds: float = 1.0
+    prompts: PromptTemplates = field(default_factory=lambda: DEFAULT_PROMPTS)
 
 
 class Runner:
@@ -61,7 +61,7 @@ class Runner:
             raise ValueError("plan file is required for task execution")
         self._validate_plan_has_tasks()
         context = self._context()
-        prompt = render(TASK_PROMPT, context)
+        prompt = render(self.options.prompts.task, context)
 
         for iteration in range(1, self.options.max_iterations + 1):
             task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index() or iteration
@@ -84,7 +84,7 @@ class Runner:
             return
 
         context = self._context()
-        prompt = render(REVIEW_PROMPT, context)
+        prompt = render(self.options.prompts.review, context)
         for iteration in range(1, self.options.review_iterations + 1):
             self.log.section(f"review iteration {iteration}")
             result = self.executor.run(prompt)
@@ -102,7 +102,7 @@ class Runner:
         for iteration in range(1, self.options.review_iterations + 1):
             self.log.section(f"parallel review iteration {iteration}")
             prompts = {
-                name: render_review_agent(name, focus, context)
+                name: render_review_agent_prompt(self.options.prompts.review_agent, name, focus, context)
                 for name, focus in REVIEW_AGENTS.items()
             }
             results = self.executor.run_batch(prompts)
@@ -116,7 +116,9 @@ class Runner:
                     raise RuntimeError(describe_failure(f"gigacode review agent {name}", result))
 
             self.log.section("review synthesis")
-            synthesis = self.executor.run(render_review_synthesis(findings, context))
+            synthesis = self.executor.run(
+                render_review_synthesis_prompt(self.options.prompts.review_synthesis, findings, context)
+            )
             if not synthesis.ok:
                 raise RuntimeError(describe_failure("gigacode review synthesis", synthesis))
             if synthesis.signal == TASK_FAILED:
@@ -128,7 +130,7 @@ class Runner:
 
     def run_finalize(self) -> None:
         self.log.section("finalize")
-        result = self.executor.run(render(FINALIZE_PROMPT, self._context()))
+        result = self.executor.run(render(self.options.prompts.finalize, self._context()))
         if not result.ok:
             raise RuntimeError(describe_failure("gigacode finalize session", result))
 
@@ -136,21 +138,23 @@ class Runner:
         context = self._context()
         if not self.options.review_only:
             self.log.section("task prompt")
-            self.log.stream(render(TASK_PROMPT, context))
+            self.log.stream(render(self.options.prompts.task, context))
             self.log.stream("\n")
         if not self.options.tasks_only:
             self.log.section("review prompt")
             if self.options.parallel_review:
                 for name, focus in REVIEW_AGENTS.items():
                     self.log.stream(f"\n--- review agent: {name} ---\n")
-                    self.log.stream(render_review_agent(name, focus, context))
+                    self.log.stream(
+                        render_review_agent_prompt(self.options.prompts.review_agent, name, focus, context)
+                    )
                 self.log.stream("\n--- review synthesis prompt uses collected agent findings ---\n")
             else:
-                self.log.stream(render(REVIEW_PROMPT, context))
+                self.log.stream(render(self.options.prompts.review, context))
                 self.log.stream("\n")
         if self.options.finalize_enabled:
             self.log.section("finalize prompt")
-            self.log.stream(render(FINALIZE_PROMPT, context))
+            self.log.stream(render(self.options.prompts.finalize, context))
             self.log.stream("\n")
 
     def _context(self) -> PromptContext:

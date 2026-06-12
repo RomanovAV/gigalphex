@@ -18,6 +18,15 @@ class PromptContext:
         return f"current branch vs {self.default_branch}"
 
 
+@dataclass(frozen=True)
+class PromptTemplates:
+    task: str
+    review: str
+    review_agent: str
+    review_synthesis: str
+    finalize: str
+
+
 TASK_PROMPT = """Read the plan file at {plan_file}. Find the FIRST Task section (### Task N: or ### Iteration N:) that has uncompleted checkboxes ([ ]).
 
 Complete exactly one Task/Iteration section per run:
@@ -115,6 +124,46 @@ Plain text output only.
 """
 
 
+DEFAULT_PROMPTS = PromptTemplates(
+    task=TASK_PROMPT,
+    review=REVIEW_PROMPT,
+    review_agent=REVIEW_AGENT_PROMPT,
+    review_synthesis=REVIEW_SYNTHESIS_PROMPT,
+    finalize=FINALIZE_PROMPT,
+)
+
+PROMPT_FILES = {
+    "task": "task.txt",
+    "review": "review.txt",
+    "review_agent": "review_agent.txt",
+    "review_synthesis": "review_synthesis.txt",
+    "finalize": "finalize.txt",
+}
+
+
+def load_prompt_templates(prompt_dirs: list[Path]) -> PromptTemplates:
+    values = DEFAULT_PROMPTS.__dict__.copy()
+    for field, filename in PROMPT_FILES.items():
+        for prompt_dir in prompt_dirs:
+            path = prompt_dir / filename
+            if path.exists():
+                values[field] = path.read_text(encoding="utf-8")
+                break
+    return PromptTemplates(**values)
+
+
+def init_prompt_templates(prompt_dir: Path) -> list[Path]:
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for field, filename in PROMPT_FILES.items():
+        path = prompt_dir / filename
+        if path.exists():
+            continue
+        path.write_text(getattr(DEFAULT_PROMPTS, field), encoding="utf-8")
+        written.append(path)
+    return written
+
+
 def render(template: str, context: PromptContext) -> str:
     return template.format(
         plan_file=context.plan_file or "(no plan file)",
@@ -134,7 +183,21 @@ REVIEW_AGENTS = {
 
 
 def render_review_agent(agent_name: str, agent_focus: str, context: PromptContext) -> str:
-    return REVIEW_AGENT_PROMPT.format(
+    return DEFAULT_PROMPTS.review_agent.format(
+        agent_name=agent_name,
+        agent_focus=agent_focus,
+        default_branch=context.default_branch,
+        goal=context.goal,
+    )
+
+
+def render_review_agent_prompt(
+    template: str,
+    agent_name: str,
+    agent_focus: str,
+    context: PromptContext,
+) -> str:
+    return template.format(
         agent_name=agent_name,
         agent_focus=agent_focus,
         default_branch=context.default_branch,
@@ -143,10 +206,18 @@ def render_review_agent(agent_name: str, agent_focus: str, context: PromptContex
 
 
 def render_review_synthesis(findings: dict[str, str], context: PromptContext) -> str:
+    return render_review_synthesis_prompt(DEFAULT_PROMPTS.review_synthesis, findings, context)
+
+
+def render_review_synthesis_prompt(
+    template: str,
+    findings: dict[str, str],
+    context: PromptContext,
+) -> str:
     blocks = []
     for name, text in findings.items():
         blocks.append(f"=== {name} ===\n{text.strip() or 'NO OUTPUT'}")
-    return REVIEW_SYNTHESIS_PROMPT.format(
+    return template.format(
         agent_findings="\n\n".join(blocks),
         progress_file=context.progress_file,
         goal=context.goal,

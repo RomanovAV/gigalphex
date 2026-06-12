@@ -8,6 +8,7 @@ import shlex
 from typing import Optional
 
 from .defaults import DEFAULT_GIGACODE_ARGS
+from .prompts import init_prompt_templates
 
 
 @dataclass
@@ -16,6 +17,7 @@ class Config:
     gigacode_args: Optional[list[str]] = None
     plans_dir: Path = Path("docs/plans")
     progress_dir: Path = Path(".gigalphex/progress")
+    prompts_dir: Path = Path(".gigalphex/prompts")
     default_branch: str = "main"
     max_iterations: int = 50
     review_iterations: int = 5
@@ -31,6 +33,10 @@ class Config:
     @property
     def resolved_args(self) -> list[str]:
         return self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS.copy()
+
+    @property
+    def prompt_dirs(self) -> list[Path]:
+        return [self.prompts_dir, Path.home() / ".config/gigalphex/prompts"]
 
 
 def load_config(path: Optional[Path] = None) -> Config:
@@ -52,6 +58,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         cfg.gigacode_args = shlex.split(section.get("gigacode_args", ""))
     cfg.plans_dir = Path(section.get("plans_dir", str(cfg.plans_dir)))
     cfg.progress_dir = Path(section.get("progress_dir", str(cfg.progress_dir)))
+    cfg.prompts_dir = Path(section.get("prompts_dir", str(cfg.prompts_dir)))
     cfg.default_branch = section.get("default_branch", cfg.default_branch)
     cfg.max_iterations = section.getint("max_iterations", cfg.max_iterations)
     cfg.review_iterations = section.getint("review_iterations", cfg.review_iterations)
@@ -73,3 +80,36 @@ def _apply_env(cfg: Config) -> Config:
     if args := os.getenv("GIGALPHEX_GIGACODE_ARGS"):
         cfg.gigacode_args = shlex.split(args)
     return cfg
+
+
+DEFAULT_CONFIG_TEXT = """[gigalphex]
+# gigacode_command = gigacode
+# gigacode_args = --prompt "" --approval-mode=auto-edit
+# plans_dir = docs/plans
+# progress_dir = .gigalphex/progress
+# prompts_dir = .gigalphex/prompts
+# default_branch = main
+# max_iterations = 50
+# review_iterations = 5
+# finalize_enabled = false
+# session_timeout = 1800
+# retry_count = 1
+# retry_delay = 5
+# review_workers = 5
+# create_branch = true
+# move_plan_on_completion = true
+# allow_dirty = false
+"""
+
+
+def init_project_config(base_dir: Path = Path(".gigalphex")) -> list[Path]:
+    base_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    config_path = base_dir / "config"
+    if not config_path.exists():
+        config_path.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
+        written.append(config_path)
+
+    written.extend(init_prompt_templates(base_dir / "prompts"))
+    return written

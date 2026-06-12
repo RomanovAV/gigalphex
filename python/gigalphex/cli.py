@@ -5,10 +5,11 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-from .config import load_config
+from .config import init_project_config, load_config
 from .executor import GigaCodeExecutor
 from .git import GitService, branch_name_from_plan, move_plan_to_completed
 from .progress import ProgressLog
+from .prompts import load_prompt_templates
 from .runner import RunOptions, Runner
 
 
@@ -16,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gigalphex")
     parser.add_argument("plan_file", nargs="?", help="path to markdown plan file")
     parser.add_argument("--config", type=Path, help="config file path")
+    parser.add_argument("--init", action="store_true", help="create local .gigalphex config and prompt templates")
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
     parser.add_argument("--tasks-only", action="store_true", help="run task phase only")
@@ -39,7 +41,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.init:
+        written = init_project_config()
+        if written:
+            print("initialized gigalphex files:")
+            for path in written:
+                print(f"- {path}")
+        else:
+            print("gigalphex config already initialized")
+        return 0
+
     cfg = load_config(args.config)
+    prompts = load_prompt_templates(cfg.prompt_dirs)
 
     if args.gigacode_command:
         cfg.gigacode_command = args.gigacode_command
@@ -119,6 +132,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         finalize_enabled=cfg.finalize_enabled,
         dry_run=args.dry_run,
         parallel_review=not args.no_parallel_review,
+        prompts=prompts,
     )
 
     try:

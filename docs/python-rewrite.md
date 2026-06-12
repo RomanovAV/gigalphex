@@ -10,6 +10,7 @@
 - Run five specialist review agents in parallel, then synthesize/fix findings.
 - Optionally run a finalize prompt.
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
+- Initialize local `.gigalphex/` config and editable prompt templates.
 - Bound executor runs with session timeout, retry count, retry delay, and review worker limit.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
 
@@ -68,4 +69,10 @@ Configure command shape:
 gigacode_command = gigacode
 gigacode_args = --prompt "" --approval-mode=auto-edit
 default_branch = main
+```
+
+Create local config and prompt templates:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --init
 ```

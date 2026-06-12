@@ -51,6 +51,12 @@ PYTHONPATH=python python3 -m gigalphex.cli --dry-run ../e2e/testdata/test-plan.m
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
 ```
 
+Initialize local project config and editable prompt templates:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --init
+```
+
 Run tests:
 
 ```bash
@@ -73,6 +79,7 @@ Configure GigaCode:
 gigacode_command = gigacode
 gigacode_args = --prompt "" --approval-mode=auto-edit
 default_branch = main
+prompts_dir = .gigalphex/prompts
 session_timeout = 1800
 retry_count = 1
 retry_delay = 5
@@ -89,4 +96,13 @@ Git behavior:
 - dirty working trees are rejected unless `--allow-dirty` is passed
 - completed full runs move the plan file to `completed/`
 - use `--no-branch` or `--no-move-plan` to disable those steps
+
+Prompt customization:
+
+- `--init` creates `.gigalphex/prompts/task.txt`
+- `--init` creates `.gigalphex/prompts/review.txt`
+- `--init` creates `.gigalphex/prompts/review_agent.txt`
+- `--init` creates `.gigalphex/prompts/review_synthesis.txt`
+- `--init` creates `.gigalphex/prompts/finalize.txt`
+- loading priority is local prompts directory, then `~/.config/gigalphex/prompts`, then embedded defaults
 # gigalphex
