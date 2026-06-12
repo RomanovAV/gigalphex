@@ -20,6 +20,7 @@ class PromptContext:
 
 @dataclass(frozen=True)
 class PromptTemplates:
+    make_plan: str
     task: str
     review: str
     review_agent: str
@@ -47,6 +48,43 @@ Progress log: {progress_file}
 Default branch: {default_branch}
 
 Plain text output only. Do not continue to the next task section.
+"""
+
+MAKE_PLAN_PROMPT = """Create an implementation plan for this request:
+
+{plan_request}
+
+Write a ralphex-compatible markdown plan. The plan must be directly executable by an autonomous coding agent.
+
+Required format:
+
+# Plan: <short title>
+
+## Overview
+Briefly describe the goal and expected outcome.
+
+## Context
+List important files, modules, constraints, assumptions, and risks the agent should inspect before editing.
+
+### Task 1: <task title>
+- [ ] One concrete implementation step
+- [ ] Add or update focused tests
+- [ ] Run relevant validation
+
+### Task 2: <task title>
+- [ ] One concrete implementation step
+- [ ] Add or update focused tests
+- [ ] Run relevant validation
+
+## Validation
+- command or manual check
+
+Rules:
+- Use `### Task N:` sections only for executable work.
+- Keep tasks independently committable.
+- Prefer 2-6 tasks.
+- Include testing and validation in the task checkboxes.
+- Output only the markdown plan, with no surrounding commentary or code fences.
 """
 
 REVIEW_PROMPT = """Review {goal}.
@@ -125,6 +163,7 @@ Plain text output only.
 
 
 DEFAULT_PROMPTS = PromptTemplates(
+    make_plan=MAKE_PLAN_PROMPT,
     task=TASK_PROMPT,
     review=REVIEW_PROMPT,
     review_agent=REVIEW_AGENT_PROMPT,
@@ -133,6 +172,7 @@ DEFAULT_PROMPTS = PromptTemplates(
 )
 
 PROMPT_FILES = {
+    "make_plan": "make_plan.txt",
     "task": "task.txt",
     "review": "review.txt",
     "review_agent": "review_agent.txt",
@@ -171,6 +211,10 @@ def render(template: str, context: PromptContext) -> str:
         default_branch=context.default_branch,
         goal=context.goal,
     )
+
+
+def render_make_plan(template: str, plan_request: str) -> str:
+    return template.format(plan_request=plan_request)
 
 
 REVIEW_AGENTS = {

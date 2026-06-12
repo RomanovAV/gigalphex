@@ -8,8 +8,9 @@ from typing import Optional
 from .config import init_project_config, load_config
 from .executor import GigaCodeExecutor
 from .git import GitService, branch_name_from_plan, move_plan_to_completed
+from .planner import clean_plan_output, next_plan_path
 from .progress import ProgressLog
-from .prompts import load_prompt_templates
+from .prompts import load_prompt_templates, render_make_plan
 from .runner import RunOptions, Runner
 
 
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("plan_file", nargs="?", help="path to markdown plan file")
     parser.add_argument("--config", type=Path, help="config file path")
     parser.add_argument("--init", action="store_true", help="create local .gigalphex config and prompt templates")
+    parser.add_argument("--plan", help="create a markdown execution plan for this request")
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
     parser.add_argument("--tasks-only", action="store_true", help="run task phase only")
@@ -81,6 +83,44 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.finalize:
         cfg.finalize_enabled = True
 
+    if args.plan:
+        progress_file = cfg.progress_dir / "progress-plan.txt"
+        log = ProgressLog(progress_file)
+        executor = GigaCodeExecutor(
+            command=cfg.gigacode_command,
+            args=cfg.resolved_args,
+            timeout=cfg.session_timeout,
+            retry_count=cfg.retry_count,
+            retry_delay=cfg.retry_delay,
+            max_workers=cfg.review_workers,
+            output=log.stream,
+        )
+        prompt = render_make_plan(prompts.make_plan, args.plan)
+        if args.dry_run:
+            log.section("make plan prompt")
+            log.stream(prompt)
+            log.stream("\n")
+            print(f"progress log: {progress_file}")
+            return 0
+        try:
+            log.section("make plan")
+            log.write(f"gigacode command: {executor.command_line()}\n")
+            result = executor.run(prompt)
+            if not result.ok:
+                raise RuntimeError(f"gigacode plan session exited with status {result.returncode}")
+            plan_path = next_plan_path(cfg.plans_dir, args.plan)
+            plan_path.write_text(clean_plan_output(result.output), encoding="utf-8")
+            log.write(f"created plan: {plan_path}\n")
+        except KeyboardInterrupt:
+            print("\ninterrupted", file=sys.stderr)
+            return 130
+        except Exception as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"created plan: {plan_path}")
+        print(f"progress log: {progress_file}")
+        return 0
+
     plan_file = Path(args.plan_file).resolve() if args.plan_file else None
     if plan_file is not None and not plan_file.exists():
         print(f"error: plan file not found: {plan_file}", file=sys.stderr)
@@ -92,15 +132,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     progress_base = plan_file.stem if plan_file else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
-    git = GitService(Path("."))
-    if not args.dry_run:
-        git.ensure_repo()
-        cfg.default_branch = git.default_branch(cfg.default_branch)
-        git.ensure_clean(cfg.allow_dirty)
-        if cfg.create_branch and plan_file is not None and not args.review:
-            branch = args.branch or branch_name_from_plan(plan_file)
-            git.switch_or_create_branch(branch)
-
     executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
         args=cfg.resolved_args,
@@ -110,6 +141,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_workers=cfg.review_workers,
         output=log.stream,
     )
+    git = GitService(Path("."))
+    if not args.dry_run:
+        git.ensure_repo()
+        cfg.default_branch = git.default_branch(cfg.default_branch)
+        git.ensure_clean(cfg.allow_dirty)
+        if cfg.create_branch and plan_file is not None and not args.review:
+            branch = args.branch or branch_name_from_plan(plan_file)
+            git.switch_or_create_branch(branch)
+
     if not args.dry_run:
         log.section("startup")
         log.write(f"gigacode command: {executor.command_line()}\n")

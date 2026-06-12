@@ -33,6 +33,7 @@ class PromptTemplatesTest(unittest.TestCase):
 
             self.assertTrue((base_dir / "config").exists())
             self.assertEqual("keep me", existing.read_text(encoding="utf-8"))
+            self.assertTrue((prompt_dir / "make_plan.txt").exists())
             self.assertTrue((prompt_dir / "review.txt").exists())
             self.assertNotIn(existing, written)
 

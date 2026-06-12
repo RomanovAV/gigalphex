@@ -57,6 +57,12 @@ Initialize local project config and editable prompt templates:
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
+Create a new executable plan:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
+```
+
 Run tests:
 
 ```bash
@@ -99,6 +105,7 @@ Git behavior:
 
 Prompt customization:
 
+- `--init` creates `.gigalphex/prompts/make_plan.txt`
 - `--init` creates `.gigalphex/prompts/task.txt`
 - `--init` creates `.gigalphex/prompts/review.txt`
 - `--init` creates `.gigalphex/prompts/review_agent.txt`
