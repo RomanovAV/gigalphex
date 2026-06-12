@@ -37,9 +37,18 @@ class RunOptions:
 
 
 class Runner:
-    def __init__(self, options: RunOptions, executor: GigaCodeExecutor, log: ProgressLog) -> None:
+    def __init__(
+        self,
+        options: RunOptions,
+        executor: GigaCodeExecutor,
+        log: ProgressLog,
+        review_executor: Optional[GigaCodeExecutor] = None,
+        finalize_executor: Optional[GigaCodeExecutor] = None,
+    ) -> None:
         self.options = options
         self.executor = executor
+        self.review_executor = review_executor or executor
+        self.finalize_executor = finalize_executor or self.review_executor
         self.log = log
 
     def run(self) -> None:
@@ -87,7 +96,7 @@ class Runner:
         prompt = render(self.options.prompts.review, context)
         for iteration in range(1, self.options.review_iterations + 1):
             self.log.section(f"review iteration {iteration}")
-            result = self.executor.run(prompt)
+            result = self.review_executor.run(prompt)
             if not result.ok:
                 raise RuntimeError(describe_failure("gigacode review session", result))
             if result.signal == TASK_FAILED:
@@ -105,7 +114,7 @@ class Runner:
                 name: render_review_agent_prompt(self.options.prompts.review_agent, name, focus, context)
                 for name, focus in REVIEW_AGENTS.items()
             }
-            results = self.executor.run_batch(prompts)
+            results = self.review_executor.run_batch(prompts)
             findings: dict[str, str] = {}
             for name in REVIEW_AGENTS:
                 result = results[name]
@@ -116,7 +125,7 @@ class Runner:
                     raise RuntimeError(describe_failure(f"gigacode review agent {name}", result))
 
             self.log.section("review synthesis")
-            synthesis = self.executor.run(
+            synthesis = self.review_executor.run(
                 render_review_synthesis_prompt(self.options.prompts.review_synthesis, findings, context)
             )
             if not synthesis.ok:
@@ -130,7 +139,7 @@ class Runner:
 
     def run_finalize(self) -> None:
         self.log.section("finalize")
-        result = self.executor.run(render(self.options.prompts.finalize, self._context()))
+        result = self.finalize_executor.run(render(self.options.prompts.finalize, self._context()))
         if not result.ok:
             raise RuntimeError(describe_failure("gigacode finalize session", result))
 

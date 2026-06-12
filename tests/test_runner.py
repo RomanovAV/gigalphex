@@ -54,6 +54,30 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(1, len(executor.single_prompts))
             self.assertIn("specialist review agents", executor.single_prompts[0])
 
+    def test_review_uses_review_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            task_executor = FakeExecutor()
+            review_executor = FakeExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=True,
+                ),
+                task_executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+                review_executor=review_executor,  # type: ignore[arg-type]
+            )
+
+            runner.run()
+
+            self.assertEqual(0, len(task_executor.batch_prompts))
+            self.assertEqual(0, len(task_executor.single_prompts))
+            self.assertEqual(1, len(review_executor.batch_prompts))
+            self.assertEqual(1, len(review_executor.single_prompts))
+
 
 class FailureDescriptionTest(unittest.TestCase):
     def test_describes_timeout_and_attempts(self) -> None:

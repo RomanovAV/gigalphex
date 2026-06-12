@@ -22,6 +22,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--plan", help="create a markdown execution plan for this request")
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
+    parser.add_argument("--plan-model", help="GigaCode model for plan creation; falls back to task model")
+    parser.add_argument("--task-model", help="GigaCode model for task execution")
+    parser.add_argument("--review-model", help="GigaCode model for review agents and synthesis; falls back to task model")
+    parser.add_argument("--finalize-model", help="GigaCode model for finalize; falls back to review/task model")
     parser.add_argument("--tasks-only", action="store_true", help="run task phase only")
     parser.add_argument("--review", action="store_true", help="skip tasks and run review phase")
     parser.add_argument("--max-iterations", type=int, help="maximum task iterations")
@@ -60,6 +64,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.gigacode_command = args.gigacode_command
     if args.gigacode_arg:
         cfg.gigacode_args = [*cfg.resolved_args, *args.gigacode_arg]
+    if args.plan_model:
+        cfg.plan_model = args.plan_model
+    if args.task_model:
+        cfg.task_model = args.task_model
+    if args.review_model:
+        cfg.review_model = args.review_model
+    if args.finalize_model:
+        cfg.finalize_model = args.finalize_model
     if args.max_iterations is not None:
         cfg.max_iterations = args.max_iterations
     if args.review_iterations is not None:
@@ -88,7 +100,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         log = ProgressLog(progress_file)
         executor = GigaCodeExecutor(
             command=cfg.gigacode_command,
-            args=cfg.resolved_args,
+            args=cfg.args_for_phase("plan"),
             timeout=cfg.session_timeout,
             retry_count=cfg.retry_count,
             retry_delay=cfg.retry_delay,
@@ -132,9 +144,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     progress_base = plan_file.stem if plan_file else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
-    executor = GigaCodeExecutor(
+    task_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
-        args=cfg.resolved_args,
+        args=cfg.args_for_phase("task"),
+        timeout=cfg.session_timeout,
+        retry_count=cfg.retry_count,
+        retry_delay=cfg.retry_delay,
+        max_workers=cfg.review_workers,
+        output=log.stream,
+    )
+    review_executor = GigaCodeExecutor(
+        command=cfg.gigacode_command,
+        args=cfg.args_for_phase("review"),
+        timeout=cfg.session_timeout,
+        retry_count=cfg.retry_count,
+        retry_delay=cfg.retry_delay,
+        max_workers=cfg.review_workers,
+        output=log.stream,
+    )
+    finalize_executor = GigaCodeExecutor(
+        command=cfg.gigacode_command,
+        args=cfg.args_for_phase("finalize"),
         timeout=cfg.session_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
@@ -152,7 +182,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if not args.dry_run:
         log.section("startup")
-        log.write(f"gigacode command: {executor.command_line()}\n")
+        log.write(f"gigacode command: {task_executor.command_line()}\n")
+        if review_executor.command_line() != task_executor.command_line():
+            log.write(f"review gigacode command: {review_executor.command_line()}\n")
+        if cfg.finalize_enabled and finalize_executor.command_line() != review_executor.command_line():
+            log.write(f"finalize gigacode command: {finalize_executor.command_line()}\n")
         if cfg.session_timeout:
             log.write(f"session timeout: {cfg.session_timeout}s\n")
         if cfg.retry_count:
@@ -176,7 +210,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     try:
-        Runner(options, executor, log).run()
+        Runner(options, task_executor, log, review_executor=review_executor, finalize_executor=finalize_executor).run()
         if (
             not args.dry_run
             and cfg.move_plan_on_completion

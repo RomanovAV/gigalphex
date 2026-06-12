@@ -68,6 +68,13 @@ Create a new executable plan:
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
 
+Run review with a different GigaCode model:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --review --review-model <model-name>
+PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md --review-model <model-name>
+```
+
 Run tests:
 
 ```bash
@@ -89,6 +96,8 @@ Configure GigaCode:
 [gigalphex]
 gigacode_command = gigacode
 gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+task_model =
+review_model =
 default_branch = main
 prompts_dir = .gigalphex/prompts
 session_timeout = 1800
@@ -117,4 +126,12 @@ Prompt customization:
 - `--init` creates `.gigalphex/prompts/review_synthesis.txt`
 - `--init` creates `.gigalphex/prompts/finalize.txt`
 - loading priority is local prompts directory, then `~/.config/gigalphex/prompts`, then embedded defaults
+
+Model selection:
+
+- GigaCode exposes model selection as `-m/--model`, separate from `-p/--prompt`.
+- `plan_model`, `task_model`, `review_model`, and `finalize_model` add
+  `--model <name>` to the GigaCode invocation for that phase.
+- `plan_model` falls back to `task_model`, `review_model` falls back to
+  `task_model`, and `finalize_model` falls back to `review_model`/`task_model`.
 # gigalphex

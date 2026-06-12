@@ -11,6 +11,8 @@
 - Run five specialist review agents in parallel, then synthesize/fix findings.
 - Optionally run a finalize prompt.
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
+- Select GigaCode models per phase with `plan_model`, `task_model`,
+  `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.
 - Initialize local `.gigalphex/` config and editable prompt templates.
 - Bound executor runs with session timeout, retry count, retry delay, and review worker limit.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
@@ -33,6 +35,10 @@ custom args omit `{prompt}`, the executor falls back to sending the generated
 prompt on stdin. If the CLI later needs a subcommand or different flags, the
 executor boundary is `GigaCodeExecutor`, so adapting the invocation should be
 one local change.
+
+GigaCode model selection is a CLI concern, not a prompt concern. The CLI exposes
+`-m/--model`, so gigalphex adds `--model <name>` to the phase invocation instead
+of embedding model names in the `-p` prompt text.
 
 ## Observed GigaCode behavior
 

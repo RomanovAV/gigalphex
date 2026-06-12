@@ -23,6 +23,38 @@ class ConfigTest(unittest.TestCase):
             Config().resolved_args,
         )
 
+    def test_phase_args_add_model_flag_before_prompt_args(self) -> None:
+        cfg = Config(task_model="fast-task", review_model="strong-review")
+
+        self.assertEqual(
+            [
+                "--model",
+                "strong-review",
+                "-p",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.args_for_phase("review"),
+        )
+
+    def test_review_model_falls_back_to_task_model(self) -> None:
+        cfg = Config(task_model="shared-model")
+
+        self.assertEqual(
+            [
+                "--model",
+                "shared-model",
+                "-p",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.args_for_phase("review"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,10 @@ from .prompts import init_prompt_templates
 class Config:
     gigacode_command: str = "gigacode"
     gigacode_args: Optional[list[str]] = None
+    plan_model: Optional[str] = None
+    task_model: Optional[str] = None
+    review_model: Optional[str] = None
+    finalize_model: Optional[str] = None
     plans_dir: Path = Path("docs/plans")
     progress_dir: Path = Path(".gigalphex/progress")
     prompts_dir: Path = Path(".gigalphex/prompts")
@@ -33,6 +37,24 @@ class Config:
     @property
     def resolved_args(self) -> list[str]:
         return self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS.copy()
+
+    def args_for_phase(self, phase: str) -> list[str]:
+        model = self.model_for_phase(phase)
+        args = self.resolved_args
+        if model:
+            return ["--model", model, *args]
+        return args
+
+    def model_for_phase(self, phase: str) -> Optional[str]:
+        if phase == "plan":
+            return self.plan_model or self.task_model
+        if phase == "task":
+            return self.task_model
+        if phase == "review":
+            return self.review_model or self.task_model
+        if phase == "finalize":
+            return self.finalize_model or self.review_model or self.task_model
+        raise ValueError(f"unknown phase: {phase}")
 
     @property
     def prompt_dirs(self) -> list[Path]:
@@ -56,6 +78,10 @@ def load_config(path: Optional[Path] = None) -> Config:
     cfg.gigacode_command = section.get("gigacode_command", cfg.gigacode_command)
     if "gigacode_args" in section:
         cfg.gigacode_args = shlex.split(section.get("gigacode_args", ""))
+    cfg.plan_model = _optional_str(section.get("plan_model", cfg.plan_model))
+    cfg.task_model = _optional_str(section.get("task_model", cfg.task_model))
+    cfg.review_model = _optional_str(section.get("review_model", cfg.review_model))
+    cfg.finalize_model = _optional_str(section.get("finalize_model", cfg.finalize_model))
     cfg.plans_dir = Path(section.get("plans_dir", str(cfg.plans_dir)))
     cfg.progress_dir = Path(section.get("progress_dir", str(cfg.progress_dir)))
     cfg.prompts_dir = Path(section.get("prompts_dir", str(cfg.prompts_dir)))
@@ -79,12 +105,27 @@ def _apply_env(cfg: Config) -> Config:
         cfg.gigacode_command = command
     if args := os.getenv("GIGALPHEX_GIGACODE_ARGS"):
         cfg.gigacode_args = shlex.split(args)
+    if model := os.getenv("GIGALPHEX_TASK_MODEL"):
+        cfg.task_model = model
+    if model := os.getenv("GIGALPHEX_REVIEW_MODEL"):
+        cfg.review_model = model
     return cfg
+
+
+def _optional_str(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
 # gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+# plan_model =
+# task_model =
+# review_model =
+# finalize_model =
 # plans_dir = docs/plans
 # progress_dir = .gigalphex/progress
 # prompts_dir = .gigalphex/prompts
