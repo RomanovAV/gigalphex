@@ -62,9 +62,9 @@ Initialize local project config and editable prompt templates:
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
-If you skip `--init`, the first real plan execution initializes the local
-`.gigalphex/config` and prompt templates automatically. Dry runs, plan creation,
-and review-only runs do not auto-create these files.
+If you skip `--init`, the first real plan creation or plan execution initializes
+the local `.gigalphex/config` and prompt templates automatically. Dry runs and
+review-only runs do not auto-create these files.
 
 Create a new executable plan:
 
@@ -73,6 +73,9 @@ PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
 
 Generated plans are requested in the same language as the `--plan` text.
+By default, a newly created plan is committed as `docs: add plan <name>` when
+the current directory is inside a git repository. Use `--no-commit-plan` or
+`commit_plan_on_creation = false` to leave the plan uncommitted.
 
 Run review with a different GigaCode model:
 
@@ -112,6 +115,7 @@ retry_delay = 5
 review_workers = 5
 create_branch = true
 move_plan_on_completion = true
+commit_plan_on_creation = true
 allow_dirty = false
 ```
 

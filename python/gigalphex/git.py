@@ -36,6 +36,10 @@ class GitService:
         if proc.returncode != 0 or proc.stdout.strip() != "true":
             raise GitError("not inside a git repository")
 
+    def is_repo(self) -> bool:
+        proc = self.run("rev-parse", "--is-inside-work-tree", check=False)
+        return proc.returncode == 0 and proc.stdout.strip() == "true"
+
     def default_branch(self, configured: str = "") -> str:
         if configured:
             return configured
@@ -83,6 +87,10 @@ class GitService:
             self.run("switch", branch)
             return
         self.run("switch", "-c", branch)
+
+    def commit_file(self, path: Path, message: str) -> None:
+        self.run("add", "--", str(path))
+        self.run("commit", "--only", "-m", message, "--", str(path))
 
 
 def branch_name_from_plan(plan_file: Path) -> str:

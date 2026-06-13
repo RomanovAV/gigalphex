@@ -32,6 +32,7 @@ class Config:
     review_workers: int = 5
     create_branch: bool = True
     move_plan_on_completion: bool = True
+    commit_plan_on_creation: bool = True
     allow_dirty: bool = False
 
     @property
@@ -96,6 +97,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     cfg.review_workers = section.getint("review_workers", cfg.review_workers)
     cfg.create_branch = section.getboolean("create_branch", cfg.create_branch)
     cfg.move_plan_on_completion = section.getboolean("move_plan_on_completion", cfg.move_plan_on_completion)
+    cfg.commit_plan_on_creation = section.getboolean("commit_plan_on_creation", cfg.commit_plan_on_creation)
     cfg.allow_dirty = section.getboolean("allow_dirty", cfg.allow_dirty)
     return _apply_env(cfg)
 
@@ -139,6 +141,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # review_workers = 5
 # create_branch = true
 # move_plan_on_completion = true
+# commit_plan_on_creation = true
 # allow_dirty = false
 """
 

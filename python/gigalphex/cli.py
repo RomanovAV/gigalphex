@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-branch", action="store_true", help="do not create/switch branches")
     parser.add_argument("--allow-dirty", action="store_true", help="allow starting with uncommitted changes")
     parser.add_argument("--no-move-plan", action="store_true", help="do not move completed plan to completed/")
+    parser.add_argument("--no-commit-plan", action="store_true", help="do not commit newly created plans")
     parser.add_argument("--finalize", action="store_true", help="run finalize prompt after review")
     parser.add_argument("--no-parallel-review", action="store_true", help="use a single review prompt instead of parallel agents")
     parser.add_argument("--dry-run", action="store_true", help="print prompts instead of invoking gigacode")
@@ -46,15 +47,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def should_auto_init(args: argparse.Namespace) -> bool:
-    return bool(
-        args.plan_file
-        and not args.plan
-        and not args.review
-        and not args.dry_run
-        and args.config is None
-        and Path(args.plan_file).exists()
-        and not Path(".gigalphex/config").exists()
-    )
+    if args.dry_run or args.review or args.config is not None or Path(".gigalphex/config").exists():
+        return False
+    if args.plan:
+        return True
+    return bool(args.plan_file and Path(args.plan_file).exists())
+
+
+def plan_commit_message(plan_path: Path) -> str:
+    return f"docs: add plan {plan_path.stem}"
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -109,6 +110,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.allow_dirty = True
     if args.no_move_plan:
         cfg.move_plan_on_completion = False
+    if args.no_commit_plan:
+        cfg.commit_plan_on_creation = False
     if args.finalize:
         cfg.finalize_enabled = True
 
@@ -140,6 +143,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             plan_path = next_plan_path(cfg.plans_dir, args.plan)
             plan_path.write_text(clean_plan_output(result.output), encoding="utf-8")
             log.write(f"created plan: {plan_path}\n")
+            if cfg.commit_plan_on_creation:
+                git = GitService(Path("."))
+                if git.is_repo():
+                    message = plan_commit_message(plan_path)
+                    git.commit_file(plan_path, message)
+                    log.write(f"committed plan: {message}\n")
+                else:
+                    log.write("skipped plan commit: not inside a git repository\n")
         except KeyboardInterrupt:
             print("\ninterrupted", file=sys.stderr)
             return 130

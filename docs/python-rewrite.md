@@ -4,6 +4,8 @@
 
 - Parse markdown plans with `### Task N:` / `### Iteration N:` sections and actionable checkboxes.
 - Create gigalphex-compatible plans from a free-form request.
+- Commit newly created plan files by default when running inside a git
+  repository.
 - Run one task section per agent iteration.
 - Stream agent output to terminal and a progress log.
 - Detect gigalphex completion signals.
@@ -14,7 +16,7 @@
 - Select GigaCode models per phase with `plan_model`, `task_model`,
   `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.
 - Initialize local `.gigalphex/` config and editable prompt templates, including
-  automatic initialization on first real plan execution.
+  automatic initialization on first real plan creation or execution.
 - Bound executor runs with session timeout, retry count, retry delay, and review worker limit.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
 
