@@ -104,6 +104,35 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             self.assertTrue((tmp_path / ".gigalphex/prompts/task.txt").exists())
             self.assertTrue((tmp_path / ".gigalphex/prompts/review_synthesis.txt").exists())
 
+    def test_plan_execution_outside_git_repo_returns_actionable_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            plan = tmp_path / "docs/plans/20260612-smoke.md"
+            plan.parent.mkdir(parents=True)
+            plan.write_text(
+                """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                encoding="utf-8",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    code = main([str(plan)])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(1, code)
+            self.assertIn("not inside a git repository", stderr.getvalue())
+            self.assertIn("--init-git", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_plan_creation_commits_created_plan_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

@@ -7,7 +7,7 @@ from typing import Optional
 
 from .config import init_project_config, load_config
 from .executor import GigaCodeExecutor
-from .git import GitService, branch_name_from_plan, move_plan_to_completed
+from .git import GitError, GitService, branch_name_from_plan, move_plan_to_completed
 from .planner import clean_plan_output, next_plan_path
 from .progress import ProgressLog
 from .prompts import load_prompt_templates, render_make_plan
@@ -207,12 +207,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     git = GitService(Path("."))
     if not args.dry_run:
-        git.ensure_repo()
-        cfg.default_branch = git.default_branch(cfg.default_branch)
-        git.ensure_clean(cfg.allow_dirty)
-        if cfg.create_branch and plan_file is not None and not args.review:
-            branch = args.branch or branch_name_from_plan(plan_file)
-            git.switch_or_create_branch(branch)
+        try:
+            git.ensure_repo()
+            cfg.default_branch = git.default_branch(cfg.default_branch)
+            git.ensure_clean(cfg.allow_dirty)
+            if cfg.create_branch and plan_file is not None and not args.review:
+                branch = args.branch or branch_name_from_plan(plan_file)
+                git.switch_or_create_branch(branch)
+        except GitError as exc:
+            hint = "; pass --init-git to initialize this directory first" if str(exc) == "not inside a git repository" else ""
+            print(f"error: {exc}{hint}", file=sys.stderr)
+            return 1
 
     if not args.dry_run:
         log.section("startup")
