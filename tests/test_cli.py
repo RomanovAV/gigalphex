@@ -133,6 +133,64 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             self.assertIn("--init-git", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_plan_execution_init_git_commits_initial_state_before_dirty_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
+""",
+            )
+            plan = tmp_path / "docs/plans/20260612-smoke.md"
+            plan.parent.mkdir(parents=True)
+            plan.write_text(
+                """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                encoding="utf-8",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                stdout = io.StringIO()
+                git_env = {
+                    "GIT_AUTHOR_NAME": "GigaLphex Test",
+                    "GIT_AUTHOR_EMAIL": "test@example.com",
+                    "GIT_COMMITTER_NAME": "GigaLphex Test",
+                    "GIT_COMMITTER_EMAIL": "test@example.com",
+                }
+                with patch.dict(os.environ, git_env), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            str(plan),
+                            "--init-git",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                            "--tasks-only",
+                            "--no-move-plan",
+                        ]
+                    )
+
+                log = subprocess.run(
+                    ["git", "log", "--oneline", "--decorate"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertIn("initialized git repository", stdout.getvalue())
+            self.assertIn("committed initial repository state", stdout.getvalue())
+            self.assertIn("chore: initialize repository", log)
+
     def test_plan_creation_commits_created_plan_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

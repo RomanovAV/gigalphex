@@ -74,6 +74,9 @@ PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication" --in
 
 Without `--init-git`, `gigalphex` does not create a git repository for you. Plan
 creation still works, but the created plan is left uncommitted outside git.
+When `--init-git` creates a new repository, it commits the current files first
+as `chore: initialize repository`, then continues with plan creation or
+execution.
 
 Create a new executable plan:
 

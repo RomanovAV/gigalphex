@@ -76,6 +76,10 @@ class GitService:
         proc = self.run("status", "--porcelain", check=True)
         return bool(proc.stdout.strip())
 
+    def has_commits(self) -> bool:
+        proc = self.run("rev-parse", "--verify", "HEAD", check=False)
+        return proc.returncode == 0
+
     def ensure_clean(self, allow_dirty: bool) -> None:
         if not allow_dirty and self.is_dirty():
             raise GitError("working tree has uncommitted changes; commit/stash them or pass --allow-dirty")
@@ -97,6 +101,13 @@ class GitService:
     def commit_file(self, path: Path, message: str) -> None:
         self.run("add", "--", str(path))
         self.run("commit", "--only", "-m", message, "--", str(path))
+
+    def commit_all_if_dirty(self, message: str) -> bool:
+        if not self.is_dirty():
+            return False
+        self.run("add", "--all")
+        self.run("commit", "-m", message)
+        return True
 
 
 def branch_name_from_plan(plan_file: Path) -> str:

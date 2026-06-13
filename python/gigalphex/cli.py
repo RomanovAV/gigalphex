@@ -80,6 +80,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         git = GitService(Path("."))
         if git.init_repo_if_missing():
             print("initialized git repository")
+        if not git.has_commits() and git.commit_all_if_dirty("chore: initialize repository"):
+            print("committed initial repository state")
 
     cfg = load_config(args.config)
     prompts = load_prompt_templates(cfg.prompt_dirs)
