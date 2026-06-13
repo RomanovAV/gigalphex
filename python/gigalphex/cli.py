@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("plan_file", nargs="?", help="path to markdown plan file")
     parser.add_argument("--config", type=Path, help="config file path")
     parser.add_argument("--init", action="store_true", help="create local .gigalphex config and prompt templates")
+    parser.add_argument("--init-git", action="store_true", help="run git init first when current directory is not a git repository")
     parser.add_argument("--plan", help="create a markdown execution plan for this request")
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
@@ -74,6 +75,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         written = init_project_config()
         if written:
             print(f"initialized local gigalphex config: {Path('.gigalphex/config')}")
+
+    if args.init_git and not args.dry_run:
+        git = GitService(Path("."))
+        if git.init_repo_if_missing():
+            print("initialized git repository")
 
     cfg = load_config(args.config)
     prompts = load_prompt_templates(cfg.prompt_dirs)

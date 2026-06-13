@@ -66,6 +66,15 @@ If you skip `--init`, the first real plan creation or plan execution initializes
 the local `.gigalphex/config` and prompt templates automatically. Dry runs and
 review-only runs do not auto-create these files.
 
+Initialize git automatically when creating or running a plan in a fresh folder:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication" --init-git
+```
+
+Without `--init-git`, `gigalphex` does not create a git repository for you. Plan
+creation still works, but the created plan is left uncommitted outside git.
+
 Create a new executable plan:
 
 ```bash

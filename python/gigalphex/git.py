@@ -40,6 +40,12 @@ class GitService:
         proc = self.run("rev-parse", "--is-inside-work-tree", check=False)
         return proc.returncode == 0 and proc.stdout.strip() == "true"
 
+    def init_repo_if_missing(self) -> bool:
+        if self.is_repo():
+            return False
+        self.run("init")
+        return True
+
     def default_branch(self, configured: str = "") -> str:
         if configured:
             return configured

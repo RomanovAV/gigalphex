@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
@@ -150,6 +151,56 @@ print("- [ ] Do it")
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
             self.assertTrue((tmp_path / ".gigalphex/prompts/make_plan.txt").exists())
+
+    def test_plan_creation_can_initialize_git_repository_before_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("# Plan: Demo")
+print()
+print("### Task 1: Build")
+print("- [ ] Do it")
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                stdout = io.StringIO()
+                git_env = {
+                    "GIT_AUTHOR_NAME": "GigaLphex Test",
+                    "GIT_AUTHOR_EMAIL": "test@example.com",
+                    "GIT_COMMITTER_NAME": "GigaLphex Test",
+                    "GIT_COMMITTER_EMAIL": "test@example.com",
+                }
+                with patch.dict(os.environ, git_env), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            "--plan",
+                            "add demo feature",
+                            "--init-git",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                        ]
+                    )
+
+                committed = subprocess.run(
+                    ["git", "log", "--name-only", "--format=%s", "-1"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertTrue((tmp_path / ".git").exists())
+            self.assertIn("docs: add plan 202", committed)
+            self.assertIn("docs/plans/", committed)
 
 
 if __name__ == "__main__":

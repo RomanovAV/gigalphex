@@ -6,6 +6,7 @@
 - Create gigalphex-compatible plans from a free-form request.
 - Commit newly created plan files by default when running inside a git
   repository.
+- Optionally initialize a missing git repository with `--init-git`.
 - Run one task section per agent iteration.
 - Stream agent output to terminal and a progress log.
 - Detect gigalphex completion signals.
