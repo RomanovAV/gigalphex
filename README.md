@@ -72,6 +72,8 @@ Create a new executable plan:
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
 
+Generated plans are requested in the same language as the `--plan` text.
+
 Run review with a different GigaCode model:
 
 ```bash

@@ -10,6 +10,9 @@ from gigalphex.prompts import DEFAULT_PROMPTS, load_prompt_templates
 
 
 class PromptTemplatesTest(unittest.TestCase):
+    def test_make_plan_prompt_preserves_request_language(self) -> None:
+        self.assertIn("Write the plan in the same language as the user's request.", DEFAULT_PROMPTS.make_plan)
+
     def test_loads_local_prompt_over_embedded_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             prompt_dir = Path(tmp) / "prompts"
@@ -34,6 +37,10 @@ class PromptTemplatesTest(unittest.TestCase):
             self.assertTrue((base_dir / "config").exists())
             self.assertEqual("keep me", existing.read_text(encoding="utf-8"))
             self.assertTrue((prompt_dir / "make_plan.txt").exists())
+            self.assertIn(
+                "Write the plan in the same language as the user's request.",
+                (prompt_dir / "make_plan.txt").read_text(encoding="utf-8"),
+            )
             self.assertTrue((prompt_dir / "review.txt").exists())
             self.assertNotIn(existing, written)
 

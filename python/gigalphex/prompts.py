@@ -83,6 +83,7 @@ List important files, modules, constraints, assumptions, and risks the agent sho
 - command or manual check
 
 Rules:
+- Write the plan in the same language as the user's request.
 - Use `### Task N:` sections only for executable work.
 - Keep tasks independently committable.
 - Prefer 2-6 tasks.
