@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-iterations", type=int, help="maximum task iterations")
     parser.add_argument("--review-iterations", type=int, help="maximum review iterations")
     parser.add_argument("--session-timeout", type=int, help="seconds before killing one gigacode session")
+    parser.add_argument("--idle-timeout", type=int, help="seconds of no output before killing one gigacode session")
     parser.add_argument("--retry-count", type=int, help="retry failed gigacode sessions N times")
     parser.add_argument("--retry-delay", type=float, help="seconds between gigacode retries")
     parser.add_argument("--review-workers", type=int, help="maximum parallel review agents")
@@ -110,6 +111,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.review_iterations = args.review_iterations
     if args.session_timeout is not None:
         cfg.session_timeout = args.session_timeout
+    if args.idle_timeout is not None:
+        cfg.idle_timeout = args.idle_timeout
     if args.retry_count is not None:
         cfg.retry_count = args.retry_count
     if args.retry_delay is not None:
@@ -138,6 +141,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             command=cfg.gigacode_command,
             args=cfg.args_for_phase("plan"),
             timeout=cfg.session_timeout,
+            idle_timeout=cfg.idle_timeout,
             retry_count=cfg.retry_count,
             retry_delay=cfg.retry_delay,
             max_workers=cfg.review_workers,
@@ -220,6 +224,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("task"),
         timeout=cfg.session_timeout,
+        idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
         max_workers=cfg.review_workers,
@@ -229,6 +234,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("review"),
         timeout=cfg.session_timeout,
+        idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
         max_workers=cfg.review_workers,
@@ -238,6 +244,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("finalize"),
         timeout=cfg.session_timeout,
+        idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
         max_workers=cfg.review_workers,
@@ -252,6 +259,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"finalize gigacode command: {finalize_executor.command_line()}\n")
         if cfg.session_timeout:
             log.write(f"session timeout: {cfg.session_timeout}s\n")
+        if cfg.idle_timeout:
+            log.write(f"idle timeout: {cfg.idle_timeout}s\n")
         if cfg.retry_count:
             log.write(f"retry count: {cfg.retry_count}, retry delay: {cfg.retry_delay}s\n")
         log.write(f"review workers: {cfg.review_workers}\n")

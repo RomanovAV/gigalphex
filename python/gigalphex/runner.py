@@ -189,7 +189,9 @@ class Runner:
 
 def describe_failure(label: str, result: ExecResult) -> str:
     parts = [label]
-    if result.timed_out:
+    if result.idle_timed_out:
+        parts.append("idle timed out")
+    elif result.timed_out:
         parts.append("timed out")
     else:
         parts.append(f"exited with status {result.returncode}")

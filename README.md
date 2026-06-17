@@ -122,6 +122,7 @@ Review behavior:
 - fallback: pass `--no-parallel-review` to use a single review prompt
 - limit fan-out with `--review-workers N`
 - kill stuck sessions with `--session-timeout SECONDS`
+- kill silent sessions with `--idle-timeout SECONDS`
 - retry failed sessions with `--retry-count N --retry-delay SECONDS`
 
 Configure GigaCode:
@@ -135,6 +136,7 @@ review_model =
 default_branch = main
 prompts_dir = .gigalphex/prompts
 session_timeout = 1800
+idle_timeout = 900
 retry_count = 1
 retry_delay = 5
 review_workers = 5

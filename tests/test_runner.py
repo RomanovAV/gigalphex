@@ -90,6 +90,16 @@ class FailureDescriptionTest(unittest.TestCase):
 
         self.assertEqual("gigacode review agent quality timed out after 3 attempts", message)
 
+    def test_describes_idle_timeout(self) -> None:
+        from gigalphex.runner import describe_failure
+
+        message = describe_failure(
+            "gigacode task session",
+            ExecResult(output="", returncode=-9, idle_timed_out=True),
+        )
+
+        self.assertEqual("gigacode task session idle timed out", message)
+
     def test_describes_noninteractive_approval_failure(self) -> None:
         from gigalphex.runner import describe_failure
 

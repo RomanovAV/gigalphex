@@ -20,6 +20,12 @@ class ConfigTest(unittest.TestCase):
     def test_worktree_is_disabled_by_default(self) -> None:
         self.assertFalse(Config().worktree)
 
+    def test_idle_timeout_defaults_to_fifteen_minutes(self) -> None:
+        self.assertEqual(900, Config().idle_timeout)
+
+    def test_retry_count_defaults_to_one_retry(self) -> None:
+        self.assertEqual(1, Config().retry_count)
+
     def test_resolved_default_args_are_copied(self) -> None:
         first = Config().resolved_args
         first.append("--include-directories")

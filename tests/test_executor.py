@@ -151,6 +151,33 @@ time.sleep(5)
             self.assertTrue(result.timed_out)
             self.assertFalse(result.ok)
 
+    def test_idle_timeout_marks_result_after_silent_period(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "silent.py",
+                """#!/usr/bin/env python3
+import sys
+import time
+sys.stdin.read()
+print("working", flush=True)
+time.sleep(5)
+""",
+            )
+
+            start = time.monotonic()
+            result = GigaCodeExecutor(
+                command=str(script),
+                timeout=5,
+                idle_timeout=1,
+                output=lambda _line: None,
+            ).run("prompt")
+
+            self.assertLess(time.monotonic() - start, 3)
+            self.assertTrue(result.idle_timed_out)
+            self.assertFalse(result.timed_out)
+            self.assertFalse(result.ok)
+            self.assertIn("working", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

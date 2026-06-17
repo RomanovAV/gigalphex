@@ -19,11 +19,12 @@ class ExecResult:
     signal: str = ""
     returncode: int = 0
     timed_out: bool = False
+    idle_timed_out: bool = False
     attempts: int = 1
 
     @property
     def ok(self) -> bool:
-        return self.returncode == 0 and not self.timed_out
+        return self.returncode == 0 and not self.timed_out and not self.idle_timed_out
 
     @property
     def approval_unavailable(self) -> bool:
@@ -39,6 +40,7 @@ class GigaCodeExecutor:
         command: str = "gigacode",
         args: Optional[list[str]] = None,
         timeout: Optional[int] = None,
+        idle_timeout: Optional[int] = None,
         retry_count: int = 0,
         retry_delay: float = 2.0,
         max_workers: int = 5,
@@ -47,6 +49,7 @@ class GigaCodeExecutor:
         self.command = command
         self.args = args if args is not None else DEFAULT_GIGACODE_ARGS.copy()
         self.timeout = timeout
+        self.idle_timeout = idle_timeout
         self.retry_count = max(0, retry_count)
         self.retry_delay = max(0.0, retry_delay)
         self.max_workers = max(1, max_workers)
@@ -114,19 +117,43 @@ class GigaCodeExecutor:
 
         chunks: list[str] = []
         timed_out = False
+        idle_timed_out = False
+
+        def kill_process() -> None:
+            if proc.poll() is None:
+                proc.kill()
 
         def kill_on_timeout() -> None:
             nonlocal timed_out
             timed_out = True
-            proc.kill()
+            kill_process()
+
+        def kill_on_idle_timeout() -> None:
+            nonlocal idle_timed_out
+            idle_timed_out = True
+            kill_process()
 
         timer: Optional[threading.Timer] = None
+        idle_timer: Optional[threading.Timer] = None
+
+        def reset_idle_timer() -> None:
+            nonlocal idle_timer
+            if self.idle_timeout is None or self.idle_timeout <= 0:
+                return
+            if idle_timer is not None:
+                idle_timer.cancel()
+            idle_timer = threading.Timer(self.idle_timeout, kill_on_idle_timeout)
+            idle_timer.daemon = True
+            idle_timer.start()
+
         if self.timeout is not None and self.timeout > 0:
             timer = threading.Timer(self.timeout, kill_on_timeout)
             timer.daemon = True
             timer.start()
+        reset_idle_timer()
         try:
             for line in proc.stdout:
+                reset_idle_timer()
                 chunks.append(line)
                 output(line)
             returncode = proc.wait()
@@ -137,6 +164,8 @@ class GigaCodeExecutor:
         finally:
             if timer is not None:
                 timer.cancel()
+            if idle_timer is not None:
+                idle_timer.cancel()
             proc.stdout.close()
 
         if chunks and not chunks[-1].endswith("\n"):
@@ -144,7 +173,13 @@ class GigaCodeExecutor:
             output("\n")
 
         text = "".join(chunks)
-        return ExecResult(output=text, signal=detect_signal(text), returncode=returncode, timed_out=timed_out)
+        return ExecResult(
+            output=text,
+            signal=detect_signal(text),
+            returncode=returncode,
+            timed_out=timed_out,
+            idle_timed_out=idle_timed_out,
+        )
 
     def _build_invocation(self, prompt: str) -> tuple[list[str], str]:
         used_placeholder = False

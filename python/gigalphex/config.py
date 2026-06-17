@@ -27,7 +27,8 @@ class Config:
     review_iterations: int = 5
     finalize_enabled: bool = False
     session_timeout: Optional[int] = None
-    retry_count: int = 0
+    idle_timeout: Optional[int] = 900
+    retry_count: int = 1
     retry_delay: float = 2.0
     review_workers: int = 5
     create_branch: bool = True
@@ -93,6 +94,8 @@ def load_config(path: Optional[Path] = None) -> Config:
     cfg.finalize_enabled = section.getboolean("finalize_enabled", cfg.finalize_enabled)
     if "session_timeout" in section:
         cfg.session_timeout = section.getint("session_timeout")
+    if "idle_timeout" in section:
+        cfg.idle_timeout = section.getint("idle_timeout")
     cfg.retry_count = section.getint("retry_count", cfg.retry_count)
     cfg.retry_delay = section.getfloat("retry_delay", cfg.retry_delay)
     cfg.review_workers = section.getint("review_workers", cfg.review_workers)
@@ -138,6 +141,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # review_iterations = 5
 # finalize_enabled = false
 # session_timeout = 1800
+# idle_timeout = 900
 # retry_count = 1
 # retry_delay = 5
 # review_workers = 5
