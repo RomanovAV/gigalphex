@@ -57,6 +57,9 @@ PYTHONPATH=python python3 -m gigalphex.cli --dry-run ../e2e/testdata/test-plan.m
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
 ```
 
+For colleagues testing `gigalphex` on real tasks, see the short Russian guide:
+[`docs/real-task-testing-guide.md`](docs/real-task-testing-guide.md).
+
 Run a plan in a separate git worktree, close to ralphex `--worktree`
 behavior:
 
