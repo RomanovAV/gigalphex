@@ -189,7 +189,11 @@ class Runner:
 
 def describe_failure(label: str, result: ExecResult) -> str:
     parts = [label]
-    if result.idle_timed_out:
+    if result.rate_limited:
+        parts.append("rate limited")
+    elif result.transient_error:
+        parts.append("hit a transient error")
+    elif result.idle_timed_out:
         parts.append("idle timed out")
     elif result.timed_out:
         parts.append("timed out")

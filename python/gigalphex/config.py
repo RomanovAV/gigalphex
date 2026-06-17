@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from configparser import ConfigParser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
 import shlex
 from typing import Optional
 
 from .defaults import DEFAULT_GIGACODE_ARGS
+from .executor import DEFAULT_RATE_LIMIT_PATTERNS, DEFAULT_TRANSIENT_RETRY_PATTERNS
 from .prompts import init_prompt_templates
 
 
@@ -29,7 +30,10 @@ class Config:
     session_timeout: Optional[int] = None
     idle_timeout: Optional[int] = 900
     retry_count: int = 1
-    retry_delay: float = 2.0
+    retry_delay: float = 5.0
+    retry_patterns: list[str] = field(default_factory=lambda: DEFAULT_TRANSIENT_RETRY_PATTERNS.copy())
+    rate_limit_patterns: list[str] = field(default_factory=lambda: DEFAULT_RATE_LIMIT_PATTERNS.copy())
+    wait_on_rate_limit: Optional[float] = None
     review_workers: int = 5
     create_branch: bool = True
     worktree: bool = False
@@ -98,6 +102,12 @@ def load_config(path: Optional[Path] = None) -> Config:
         cfg.idle_timeout = section.getint("idle_timeout")
     cfg.retry_count = section.getint("retry_count", cfg.retry_count)
     cfg.retry_delay = section.getfloat("retry_delay", cfg.retry_delay)
+    if "retry_patterns" in section:
+        cfg.retry_patterns = _csv_list(section.get("retry_patterns", ""))
+    if "rate_limit_patterns" in section:
+        cfg.rate_limit_patterns = _csv_list(section.get("rate_limit_patterns", ""))
+    if "wait_on_rate_limit" in section:
+        cfg.wait_on_rate_limit = section.getfloat("wait_on_rate_limit")
     cfg.review_workers = section.getint("review_workers", cfg.review_workers)
     cfg.create_branch = section.getboolean("create_branch", cfg.create_branch)
     cfg.worktree = section.getboolean("worktree", cfg.worktree)
@@ -126,6 +136,10 @@ def _optional_str(value: Optional[str]) -> Optional[str]:
     return stripped or None
 
 
+def _csv_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
 # gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
@@ -144,6 +158,9 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # idle_timeout = 900
 # retry_count = 1
 # retry_delay = 5
+# retry_patterns = FYA_TRANSIENT_TIMEOUT,API Error: 529,API Error: 502,API Error: 503,API Error: 504,502 Bad Gateway,503 Service Unavailable,504 Gateway Timeout
+# rate_limit_patterns = Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit
+# wait_on_rate_limit =
 # review_workers = 5
 # create_branch = true
 # worktree = false

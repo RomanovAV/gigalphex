@@ -36,6 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--idle-timeout", type=int, help="seconds of no output before killing one gigacode session")
     parser.add_argument("--retry-count", type=int, help="retry failed gigacode sessions N times")
     parser.add_argument("--retry-delay", type=float, help="seconds between gigacode retries")
+    parser.add_argument("--retry-pattern", action="append", default=[], help="transient error text to treat as retryable")
+    parser.add_argument("--rate-limit-pattern", action="append", default=[], help="rate-limit text to detect in failed sessions")
+    parser.add_argument("--wait-on-rate-limit", type=float, help="seconds to wait before retrying a rate-limited session")
     parser.add_argument("--review-workers", type=int, help="maximum parallel review agents")
     parser.add_argument("--default-branch", help="default branch for diffs")
     parser.add_argument("--branch", help="branch to create/switch to before running a plan")
@@ -117,6 +120,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.retry_count = args.retry_count
     if args.retry_delay is not None:
         cfg.retry_delay = args.retry_delay
+    if args.retry_pattern:
+        cfg.retry_patterns = [*cfg.retry_patterns, *args.retry_pattern]
+    if args.rate_limit_pattern:
+        cfg.rate_limit_patterns = [*cfg.rate_limit_patterns, *args.rate_limit_pattern]
+    if args.wait_on_rate_limit is not None:
+        cfg.wait_on_rate_limit = args.wait_on_rate_limit
     if args.review_workers is not None:
         cfg.review_workers = args.review_workers
     if args.default_branch:
@@ -144,6 +153,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             idle_timeout=cfg.idle_timeout,
             retry_count=cfg.retry_count,
             retry_delay=cfg.retry_delay,
+            retry_patterns=cfg.retry_patterns,
+            rate_limit_patterns=cfg.rate_limit_patterns,
+            wait_on_rate_limit=cfg.wait_on_rate_limit,
             max_workers=cfg.review_workers,
             output=log.stream,
         )
@@ -227,6 +239,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
+        retry_patterns=cfg.retry_patterns,
+        rate_limit_patterns=cfg.rate_limit_patterns,
+        wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
     )
@@ -237,6 +252,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
+        retry_patterns=cfg.retry_patterns,
+        rate_limit_patterns=cfg.rate_limit_patterns,
+        wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
     )
@@ -247,6 +265,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
         retry_delay=cfg.retry_delay,
+        retry_patterns=cfg.retry_patterns,
+        rate_limit_patterns=cfg.rate_limit_patterns,
+        wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
     )
@@ -263,6 +284,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"idle timeout: {cfg.idle_timeout}s\n")
         if cfg.retry_count:
             log.write(f"retry count: {cfg.retry_count}, retry delay: {cfg.retry_delay}s\n")
+        if cfg.wait_on_rate_limit is not None:
+            log.write(f"rate limit wait: {cfg.wait_on_rate_limit}s\n")
         log.write(f"review workers: {cfg.review_workers}\n")
         log.write(f"default branch: {cfg.default_branch}\n")
         if worktree_path is not None:

@@ -124,6 +124,9 @@ Review behavior:
 - kill stuck sessions with `--session-timeout SECONDS`
 - kill silent sessions with `--idle-timeout SECONDS`
 - retry failed sessions with `--retry-count N --retry-delay SECONDS`
+- classify transient failures with `retry_patterns`
+- classify rate limits with `rate_limit_patterns`; pass
+  `--wait-on-rate-limit SECONDS` to wait longer before retrying those failures
 
 Configure GigaCode:
 
@@ -139,6 +142,9 @@ session_timeout = 1800
 idle_timeout = 900
 retry_count = 1
 retry_delay = 5
+retry_patterns = FYA_TRANSIENT_TIMEOUT,API Error: 529,API Error: 502,API Error: 503,API Error: 504,502 Bad Gateway,503 Service Unavailable,504 Gateway Timeout
+rate_limit_patterns = Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit
+wait_on_rate_limit =
 review_workers = 5
 create_branch = true
 worktree = false

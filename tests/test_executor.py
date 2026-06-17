@@ -128,6 +128,61 @@ print("ok")
             self.assertEqual(2, result.attempts)
             self.assertIn("ok", result.output)
 
+    def test_marks_transient_retry_pattern_on_failed_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "transient.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("API Error: 503")
+raise SystemExit(7)
+""",
+            )
+
+            result = GigaCodeExecutor(
+                command=str(script),
+                retry_count=0,
+                output=lambda _line: None,
+            ).run("prompt")
+
+            self.assertTrue(result.transient_error)
+            self.assertFalse(result.ok)
+
+    def test_rate_limit_uses_configured_wait_before_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            marker = tmp_path / "attempts"
+            script = write_script(
+                tmp_path / "rate_limited.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+marker = Path({str(marker)!r})
+attempt = int(marker.read_text() or "0") if marker.exists() else 0
+marker.write_text(str(attempt + 1))
+sys.stdin.read()
+if attempt == 0:
+    print("429 Too Many Requests")
+    raise SystemExit(1)
+print("ok")
+""",
+            )
+
+            start = time.monotonic()
+            result = GigaCodeExecutor(
+                command=str(script),
+                retry_count=1,
+                retry_delay=0,
+                wait_on_rate_limit=0.02,
+                output=lambda _line: None,
+            ).run("prompt")
+
+            self.assertGreaterEqual(time.monotonic() - start, 0.02)
+            self.assertTrue(result.ok)
+            self.assertEqual(2, result.attempts)
+            self.assertIn("ok", result.output)
+
     def test_timeout_marks_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             script = write_script(

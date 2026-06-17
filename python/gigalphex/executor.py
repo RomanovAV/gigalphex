@@ -13,6 +13,27 @@ from .defaults import DEFAULT_GIGACODE_ARGS
 from .signals import detect_signal
 
 
+DEFAULT_TRANSIENT_RETRY_PATTERNS = [
+    "FYA_TRANSIENT_TIMEOUT",
+    "API Error: 529",
+    "API Error: 502",
+    "API Error: 503",
+    "API Error: 504",
+    "502 Bad Gateway",
+    "503 Service Unavailable",
+    "504 Gateway Timeout",
+]
+
+DEFAULT_RATE_LIMIT_PATTERNS = [
+    "Rate limit exceeded",
+    "rate limit reached",
+    "429 Too Many Requests",
+    "quota exceeded",
+    "insufficient_quota",
+    "You've hit your usage limit",
+]
+
+
 @dataclass
 class ExecResult:
     output: str
@@ -20,11 +41,19 @@ class ExecResult:
     returncode: int = 0
     timed_out: bool = False
     idle_timed_out: bool = False
+    transient_error: bool = False
+    rate_limited: bool = False
     attempts: int = 1
 
     @property
     def ok(self) -> bool:
-        return self.returncode == 0 and not self.timed_out and not self.idle_timed_out
+        return (
+            self.returncode == 0
+            and not self.timed_out
+            and not self.idle_timed_out
+            and not self.transient_error
+            and not self.rate_limited
+        )
 
     @property
     def approval_unavailable(self) -> bool:
@@ -43,6 +72,9 @@ class GigaCodeExecutor:
         idle_timeout: Optional[int] = None,
         retry_count: int = 0,
         retry_delay: float = 2.0,
+        retry_patterns: Optional[list[str]] = None,
+        rate_limit_patterns: Optional[list[str]] = None,
+        wait_on_rate_limit: Optional[float] = None,
         max_workers: int = 5,
         output: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -52,6 +84,11 @@ class GigaCodeExecutor:
         self.idle_timeout = idle_timeout
         self.retry_count = max(0, retry_count)
         self.retry_delay = max(0.0, retry_delay)
+        self.retry_patterns = retry_patterns if retry_patterns is not None else DEFAULT_TRANSIENT_RETRY_PATTERNS.copy()
+        self.rate_limit_patterns = (
+            rate_limit_patterns if rate_limit_patterns is not None else DEFAULT_RATE_LIMIT_PATTERNS.copy()
+        )
+        self.wait_on_rate_limit = wait_on_rate_limit
         self.max_workers = max(1, max_workers)
         self.output = output or (lambda line: print(line, end=""))
 
@@ -88,12 +125,22 @@ class GigaCodeExecutor:
                 return result
             last = result
             if attempt < attempts:
-                time.sleep(self.retry_delay)
+                delay = self._retry_delay(result)
+                if result.rate_limited and delay > 0:
+                    output(f"rate limit detected; waiting {delay:g}s before retry\n")
+                elif result.transient_error and delay > 0:
+                    output(f"transient error detected; waiting {delay:g}s before retry\n")
+                time.sleep(delay)
         assert last is not None
         return last
 
     def _run_once(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         return self._run(prompt, output)
+
+    def _retry_delay(self, result: ExecResult) -> float:
+        if result.rate_limited and self.wait_on_rate_limit is not None:
+            return max(0.0, self.wait_on_rate_limit)
+        return self.retry_delay
 
     def _run(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         argv, stdin_prompt = self._build_invocation(prompt)
@@ -173,12 +220,15 @@ class GigaCodeExecutor:
             output("\n")
 
         text = "".join(chunks)
+        failed = returncode != 0 or timed_out or idle_timed_out
         return ExecResult(
             output=text,
             signal=detect_signal(text),
             returncode=returncode,
             timed_out=timed_out,
             idle_timed_out=idle_timed_out,
+            transient_error=failed and matches_any(text, self.retry_patterns),
+            rate_limited=failed and matches_any(text, self.rate_limit_patterns),
         )
 
     def _build_invocation(self, prompt: str) -> tuple[list[str], str]:
@@ -191,6 +241,11 @@ class GigaCodeExecutor:
             else:
                 args.append(arg)
         return [self.command, *args], "" if used_placeholder else prompt
+
+
+def matches_any(text: str, patterns: list[str]) -> bool:
+    lowered = text.lower()
+    return any(pattern and pattern.lower() in lowered for pattern in patterns)
 
 
 class DryRunExecutor:

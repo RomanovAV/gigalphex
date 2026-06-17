@@ -100,6 +100,26 @@ class FailureDescriptionTest(unittest.TestCase):
 
         self.assertEqual("gigacode task session idle timed out", message)
 
+    def test_describes_rate_limit(self) -> None:
+        from gigalphex.runner import describe_failure
+
+        message = describe_failure(
+            "gigacode task session",
+            ExecResult(output="", returncode=1, rate_limited=True),
+        )
+
+        self.assertEqual("gigacode task session rate limited", message)
+
+    def test_describes_transient_error(self) -> None:
+        from gigalphex.runner import describe_failure
+
+        message = describe_failure(
+            "gigacode task session",
+            ExecResult(output="", returncode=1, transient_error=True),
+        )
+
+        self.assertEqual("gigacode task session hit a transient error", message)
+
     def test_describes_noninteractive_approval_failure(self) -> None:
         from gigalphex.runner import describe_failure
 

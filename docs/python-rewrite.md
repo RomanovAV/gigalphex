@@ -24,6 +24,8 @@
   automatic initialization on first real plan creation or execution.
 - Bound executor runs with session timeout, idle timeout, retry count, retry
   delay, and review worker limit.
+- Classify transient and rate-limit executor failures with configurable
+  patterns, including optional longer waits before rate-limit retries.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
 - Run full and tasks-only plan execution in an isolated git worktree with
   `--worktree`.
