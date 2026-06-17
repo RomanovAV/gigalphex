@@ -35,6 +35,9 @@ class PromptTemplatesTest(unittest.TestCase):
             written = init_project_config(base_dir)
 
             self.assertTrue((base_dir / "config").exists())
+            self.assertTrue((Path(tmp) / ".gitignore").exists())
+            self.assertIn(".DS_Store", (Path(tmp) / ".gitignore").read_text(encoding="utf-8"))
+            self.assertIn(".gigalphex/progress/", (Path(tmp) / ".gitignore").read_text(encoding="utf-8"))
             self.assertEqual("keep me", existing.read_text(encoding="utf-8"))
             self.assertTrue((prompt_dir / "make_plan.txt").exists())
             self.assertIn(
@@ -43,6 +46,19 @@ class PromptTemplatesTest(unittest.TestCase):
             )
             self.assertTrue((prompt_dir / "review.txt").exists())
             self.assertNotIn(existing, written)
+
+    def test_init_project_config_appends_missing_gitignore_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / ".gigalphex"
+            gitignore = Path(tmp) / ".gitignore"
+            gitignore.write_text("build/\n", encoding="utf-8")
+
+            init_project_config(base_dir)
+
+            self.assertEqual(
+                "build/\n.DS_Store\n.gigalphex/progress/\n",
+                gitignore.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

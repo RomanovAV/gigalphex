@@ -6,6 +6,9 @@
 - Create gigalphex-compatible plans from a free-form request.
 - Commit newly created plan files by default when running inside a git
   repository.
+- Commit completed plan moves after a successful full run.
+- Install `.gitignore` entries for `.DS_Store` and `.gigalphex/progress/`
+  during project initialization.
 - Optionally initialize a missing git repository with `--init-git` and commit
   the initial working tree before execution.
 - Run one task section per agent iteration.

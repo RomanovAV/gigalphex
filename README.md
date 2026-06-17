@@ -65,6 +65,8 @@ PYTHONPATH=python python3 -m gigalphex.cli --init
 If you skip `--init`, the first real plan creation or plan execution initializes
 the local `.gigalphex/config` and prompt templates automatically. Dry runs and
 review-only runs do not auto-create these files.
+Initialization also creates or updates `.gitignore` with `.DS_Store` and
+`.gigalphex/progress/`, so local progress logs stay out of normal commits.
 
 Initialize git automatically when creating or running a plan in a fresh folder:
 
@@ -88,6 +90,8 @@ Generated plans are requested in the same language as the `--plan` text.
 By default, a newly created plan is committed as `docs: add plan <name>` when
 the current directory is inside a git repository. Use `--no-commit-plan` or
 `commit_plan_on_creation = false` to leave the plan uncommitted.
+When a full run finishes and moves the plan into `docs/plans/completed/`, that
+move is committed as `docs: complete plan <name>`.
 
 Run review with a different GigaCode model:
 

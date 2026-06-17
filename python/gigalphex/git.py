@@ -102,6 +102,13 @@ class GitService:
         self.run("add", "--", str(path))
         self.run("commit", "--only", "-m", message, "--", str(path))
 
+    def commit_paths(self, paths: list[Path], message: str) -> None:
+        if not paths:
+            return
+        args = [str(path) for path in paths]
+        self.run("add", "--all", "--", *args)
+        self.run("commit", "-m", message, "--", *args)
+
     def commit_all_if_dirty(self, message: str) -> bool:
         if not self.is_dirty():
             return False

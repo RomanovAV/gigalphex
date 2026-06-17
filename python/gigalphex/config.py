@@ -146,6 +146,12 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 """
 
 
+DEFAULT_GITIGNORE_LINES = [
+    ".DS_Store",
+    ".gigalphex/progress/",
+]
+
+
 def init_project_config(base_dir: Path = Path(".gigalphex")) -> list[Path]:
     base_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -155,5 +161,23 @@ def init_project_config(base_dir: Path = Path(".gigalphex")) -> list[Path]:
         config_path.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
         written.append(config_path)
 
+    gitignore_path = base_dir.parent / ".gitignore"
+    if _ensure_gitignore_lines(gitignore_path, DEFAULT_GITIGNORE_LINES):
+        written.append(gitignore_path)
+
     written.extend(init_prompt_templates(base_dir / "prompts"))
     return written
+
+
+def _ensure_gitignore_lines(path: Path, lines: list[str]) -> bool:
+    existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    missing = [line for line in lines if line not in existing]
+    if not missing:
+        return False
+
+    content = "\n".join(existing)
+    if content:
+        content += "\n"
+    content += "\n".join(missing) + "\n"
+    path.write_text(content, encoding="utf-8")
+    return True

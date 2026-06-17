@@ -289,6 +289,70 @@ print("- [ ] Do it")
             self.assertIn("docs: add plan 202", committed)
             self.assertIn("docs/plans/", committed)
 
+    def test_successful_plan_run_commits_completed_plan_move_and_ignores_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+prompt = " ".join(sys.argv[1:]) + sys.stdin.read()
+if "specialist review agents" in prompt:
+    print("<<<GIGALPHEX:REVIEW_DONE>>>")
+elif "You are the" in prompt:
+    print("NO FINDINGS")
+else:
+    print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, main(["--init"]))
+
+                plan = tmp_path / "docs/plans/20260612-smoke.md"
+                plan.parent.mkdir(parents=True)
+                plan.write_text(
+                    """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    code = main([str(plan), "--gigacode-command", str(fake_gigacode), "--no-branch"])
+
+                latest = subprocess.run(
+                    ["git", "log", "--name-only", "--format=%s", "-1"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+                status = subprocess.run(
+                    ["git", "status", "--short"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertIn("docs: complete plan 20260612-smoke", latest)
+            self.assertIn("docs/plans/completed/20260612-smoke.md", latest)
+            self.assertEqual("", status)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -59,6 +59,10 @@ def plan_commit_message(plan_path: Path) -> str:
     return f"docs: add plan {plan_path.stem}"
 
 
+def completed_plan_commit_message(plan_path: Path) -> str:
+    return f"docs: complete plan {plan_path.stem}"
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if args.init:
@@ -262,6 +266,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             moved_to = move_plan_to_completed(plan_file)
             log.section("plan")
             log.write(f"moved completed plan to {moved_to}\n")
+            if git.is_repo():
+                message = completed_plan_commit_message(plan_file)
+                git.commit_paths([plan_file, moved_to], message)
+                log.write(f"committed completed plan move: {message}\n")
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
