@@ -93,7 +93,7 @@ Configure command shape:
 [gigalphex]
 gigacode_command = gigacode
 gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
-default_branch = main
+default_branch =
 ```
 
 Create local config and prompt templates:

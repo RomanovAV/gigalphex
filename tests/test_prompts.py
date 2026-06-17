@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.config import init_project_config
-from gigalphex.prompts import DEFAULT_PROMPTS, load_prompt_templates
+from gigalphex.prompts import DEFAULT_PROMPTS, PromptContext, load_prompt_templates, render_review_synthesis_prompt
 
 
 class PromptTemplatesTest(unittest.TestCase):
@@ -23,6 +23,15 @@ class PromptTemplatesTest(unittest.TestCase):
 
             self.assertEqual("custom task {plan_file}", prompts.task)
             self.assertEqual(DEFAULT_PROMPTS.review, prompts.review)
+
+    def test_review_synthesis_template_gets_full_context(self) -> None:
+        prompt = render_review_synthesis_prompt(
+            "{default_branch} {progress_file} {goal}",
+            {"quality": "NO FINDINGS"},
+            PromptContext(None, Path("progress.txt"), "master"),
+        )
+
+        self.assertEqual("master progress.txt current branch vs master", prompt)
 
     def test_init_project_config_writes_templates_without_overwriting(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

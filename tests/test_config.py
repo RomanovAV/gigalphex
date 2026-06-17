@@ -21,6 +21,9 @@ class ConfigTest(unittest.TestCase):
     def test_worktree_is_disabled_by_default(self) -> None:
         self.assertFalse(Config().worktree)
 
+    def test_default_branch_is_auto_detected_by_default(self) -> None:
+        self.assertEqual("", Config().default_branch)
+
     def test_idle_timeout_defaults_to_fifteen_minutes(self) -> None:
         self.assertEqual(900, Config().idle_timeout)
 

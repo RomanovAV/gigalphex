@@ -209,12 +209,16 @@ def init_prompt_templates(prompt_dir: Path) -> list[Path]:
 
 
 def render(template: str, context: PromptContext) -> str:
-    return template.format(
-        plan_file=context.plan_file or "(no plan file)",
-        progress_file=context.progress_file,
-        default_branch=context.default_branch,
-        goal=context.goal,
-    )
+    return template.format(**_context_values(context))
+
+
+def _context_values(context: PromptContext) -> dict[str, object]:
+    return {
+        "plan_file": context.plan_file or "(no plan file)",
+        "progress_file": context.progress_file,
+        "default_branch": context.default_branch,
+        "goal": context.goal,
+    }
 
 
 def render_make_plan(template: str, plan_request: str) -> str:
@@ -234,8 +238,7 @@ def render_review_agent(agent_name: str, agent_focus: str, context: PromptContex
     return DEFAULT_PROMPTS.review_agent.format(
         agent_name=agent_name,
         agent_focus=agent_focus,
-        default_branch=context.default_branch,
-        goal=context.goal,
+        **_context_values(context),
     )
 
 
@@ -248,8 +251,7 @@ def render_review_agent_prompt(
     return template.format(
         agent_name=agent_name,
         agent_focus=agent_focus,
-        default_branch=context.default_branch,
-        goal=context.goal,
+        **_context_values(context),
     )
 
 
@@ -267,6 +269,5 @@ def render_review_synthesis_prompt(
         blocks.append(f"=== {name} ===\n{text.strip() or 'NO OUTPUT'}")
     return template.format(
         agent_findings="\n\n".join(blocks),
-        progress_file=context.progress_file,
-        goal=context.goal,
+        **_context_values(context),
     )

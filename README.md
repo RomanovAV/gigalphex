@@ -136,7 +136,7 @@ gigacode_command = gigacode
 gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
 task_model =
 review_model =
-default_branch = main
+default_branch =
 prompts_dir = .gigalphex/prompts
 session_timeout = 1800
 idle_timeout = 900

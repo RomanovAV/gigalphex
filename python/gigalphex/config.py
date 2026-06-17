@@ -23,7 +23,7 @@ class Config:
     plans_dir: Path = Path("docs/plans")
     progress_dir: Path = Path(".gigalphex/progress")
     prompts_dir: Path = Path(".gigalphex/prompts")
-    default_branch: str = "main"
+    default_branch: str = ""
     max_iterations: int = 50
     review_iterations: int = 5
     finalize_enabled: bool = False
@@ -150,7 +150,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # plans_dir = docs/plans
 # progress_dir = .gigalphex/progress
 # prompts_dir = .gigalphex/prompts
-# default_branch = main
+# default_branch =
 # max_iterations = 50
 # review_iterations = 5
 # finalize_enabled = false

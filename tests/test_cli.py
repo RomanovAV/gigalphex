@@ -133,6 +133,59 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             self.assertIn("--init-git", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_auto_init_does_not_make_clean_plan_execution_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
+""",
+            )
+            plan = repo / "docs/plans/20260612-smoke.md"
+            plan.parent.mkdir(parents=True)
+            plan.write_text(
+                """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                encoding="utf-8",
+            )
+
+            code = -1
+            try:
+                os.chdir(repo)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    code = main(
+                        [
+                            str(plan),
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                            "--tasks-only",
+                            "--no-move-plan",
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertEqual("", stderr.getvalue())
+            self.assertTrue((repo / ".gigalphex/config").exists())
+
     def test_plan_execution_init_git_commits_initial_state_before_dirty_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -234,6 +287,8 @@ print("- [ ] Do it")
 
             self.assertEqual(0, code)
             self.assertIn("docs: add plan 202", committed)
+            self.assertIn(".gigalphex/config", committed)
+            self.assertIn(".gitignore", committed)
             self.assertIn("docs/plans/", committed)
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
@@ -288,6 +343,44 @@ print("- [ ] Do it")
             self.assertTrue((tmp_path / ".git").exists())
             self.assertIn("docs: add plan 202", committed)
             self.assertIn("docs/plans/", committed)
+
+    def test_review_autodetects_default_branch_when_not_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            capture = tmp_path / "prompt.txt"
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+Path({str(capture)!r}).write_text("\\n".join(sys.argv[1:]) + "\\nSTDIN\\n" + sys.stdin.read())
+print("<<<GIGALPHEX:REVIEW_DONE>>>")
+""",
+            )
+
+            try:
+                os.chdir(repo)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                Path("README.md").write_text("# Demo\n", encoding="utf-8")
+                subprocess.run(["git", "add", "README.md"], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+                subprocess.run(["git", "branch", "-m", "master"], check=True)
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    code = main(["--review", "--no-parallel-review", "--gigacode-command", str(fake_gigacode)])
+            finally:
+                os.chdir(original_cwd)
+
+            captured_prompt = capture.read_text(encoding="utf-8")
+            self.assertEqual(0, code)
+            self.assertIn("git diff master...HEAD", captured_prompt)
+            self.assertNotIn("git diff main...HEAD", captured_prompt)
 
     def test_successful_plan_run_commits_completed_plan_move_and_ignores_progress(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

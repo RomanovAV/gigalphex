@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from typing import Iterable
 
 
 DATE_PREFIX_RE = re.compile(r"^[\d-]+")
@@ -77,15 +78,29 @@ class GitService:
         return Path(proc.stdout.strip()).resolve()
 
     def is_dirty(self) -> bool:
-        proc = self.run("status", "--porcelain", check=True)
-        return bool(proc.stdout.strip())
+        return bool(self.dirty_paths())
+
+    def dirty_paths(self) -> list[Path]:
+        proc = self.run("status", "--porcelain", "--untracked-files=all", check=True)
+        paths: list[Path] = []
+        for line in proc.stdout.splitlines():
+            if len(line) < 4:
+                continue
+            paths.append(Path(line[3:]))
+        return paths
 
     def has_commits(self) -> bool:
         proc = self.run("rev-parse", "--verify", "HEAD", check=False)
         return proc.returncode == 0
 
-    def ensure_clean(self, allow_dirty: bool) -> None:
-        if not allow_dirty and self.is_dirty():
+    def ensure_clean(self, allow_dirty: bool, ignored_paths: Iterable[Path] = ()) -> None:
+        if allow_dirty:
+            return
+
+        dirty = self.dirty_paths()
+        ignored = {_normalize_relative(path) for path in ignored_paths}
+        remaining = [path for path in dirty if _normalize_relative(path) not in ignored]
+        if remaining:
             raise GitError("working tree has uncommitted changes; commit/stash them or pass --allow-dirty")
 
     def branch_exists(self, branch: str) -> bool:
@@ -151,6 +166,10 @@ def branch_name_from_plan(plan_file: Path) -> str:
         name = name[:-3]
     branch = DATE_PREFIX_RE.sub("", name).strip("-")
     return branch or name
+
+
+def _normalize_relative(path: Path) -> str:
+    return Path(str(path)).as_posix().removeprefix("./")
 
 
 def worktree_dir_name(branch: str) -> str:

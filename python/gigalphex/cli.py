@@ -81,9 +81,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("gigalphex config already initialized")
         return 0
 
+    auto_init_written: list[Path] = []
+    auto_init_started_clean = False
     if should_auto_init(args):
-        written = init_project_config()
-        if written:
+        auto_init_git = GitService(Path("."))
+        auto_init_started_clean = auto_init_git.is_repo() and not auto_init_git.is_dirty()
+        auto_init_written = init_project_config()
+        if auto_init_written:
             print(f"initialized local gigalphex config: {Path('.gigalphex/config')}")
 
     if args.init_git and not args.dry_run:
@@ -179,7 +183,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 git = GitService(Path("."))
                 if git.is_repo():
                     message = plan_commit_message(plan_path)
-                    git.commit_file(plan_path, message)
+                    if auto_init_written:
+                        git.commit_paths([*auto_init_written, plan_path], message)
+                    else:
+                        git.commit_file(plan_path, message)
                     log.write(f"committed plan: {message}\n")
                 else:
                     log.write("skipped plan commit: not inside a git repository\n")
@@ -207,7 +214,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             git.ensure_repo()
             cfg.default_branch = git.default_branch(cfg.default_branch)
-            git.ensure_clean(cfg.allow_dirty)
+            ignored_dirty_paths = auto_init_written if auto_init_started_clean else []
+            git.ensure_clean(cfg.allow_dirty, ignored_dirty_paths)
             if cfg.worktree and plan_file is not None and not args.review:
                 branch = args.branch or branch_name_from_plan(plan_file)
                 repo_root = git.repo_root()
