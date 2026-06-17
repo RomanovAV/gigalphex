@@ -353,6 +353,76 @@ else:
             self.assertIn("docs/plans/completed/20260612-smoke.md", latest)
             self.assertEqual("", status)
 
+    def test_plan_run_can_use_isolated_worktree_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, main(["--init"]))
+
+                plan = tmp_path / "docs/plans/20260612-smoke.md"
+                plan.parent.mkdir(parents=True)
+                plan.write_text(
+                    """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            str(plan),
+                            "--worktree",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                            "--tasks-only",
+                            "--no-move-plan",
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            worktree = tmp_path / ".gigalphex/worktrees/smoke"
+            branch = subprocess.run(
+                ["git", "-C", str(worktree), "branch", "--show-current"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            main_branch = subprocess.run(
+                ["git", "-C", str(tmp_path), "branch", "--show-current"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+
+            self.assertEqual(0, code)
+            self.assertEqual("smoke", branch)
+            self.assertNotEqual("smoke", main_branch)
+            self.assertTrue((worktree / "docs/plans/20260612-smoke.md").exists())
+            self.assertIn("progress log:", stdout.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

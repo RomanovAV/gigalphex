@@ -56,7 +56,7 @@ class PromptTemplatesTest(unittest.TestCase):
             init_project_config(base_dir)
 
             self.assertEqual(
-                "build/\n.DS_Store\n.gigalphex/progress/\n",
+                "build/\n.DS_Store\n.gigalphex/progress/\n.gigalphex/worktrees/\n",
                 gitignore.read_text(encoding="utf-8"),
             )
 

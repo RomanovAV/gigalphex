@@ -11,6 +11,7 @@ This is a small standalone rewrite of the useful ralphex core:
 - run review and optional finalize loops
 - run five specialist review agents in parallel, then synthesize/fix findings
 - create/switch a git branch from the plan filename
+- optionally run a plan in an isolated git worktree
 - guard against dirty working trees
 - move completed plans into `completed/`
 - call `gigacode` through a configurable CLI boundary
@@ -54,6 +55,14 @@ Run from this directory:
 ```bash
 PYTHONPATH=python python3 -m gigalphex.cli --dry-run ../e2e/testdata/test-plan.md
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
+```
+
+Run a plan in a separate git worktree, close to ralphex `--worktree`
+behavior:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --worktree docs/plans/my-feature.md
+PYTHONPATH=python python3 -m gigalphex.cli --worktree --branch=my-feature docs/plans/tasks.md
 ```
 
 Initialize local project config and editable prompt templates:
@@ -130,6 +139,7 @@ retry_count = 1
 retry_delay = 5
 review_workers = 5
 create_branch = true
+worktree = false
 move_plan_on_completion = true
 commit_plan_on_creation = true
 allow_dirty = false
@@ -138,6 +148,10 @@ allow_dirty = false
 Git behavior:
 
 - plan runs create/switch to a branch derived from the plan filename
+- `--worktree` runs full and tasks-only plan execution in
+  `.gigalphex/worktrees/<branch>` instead of switching the current checkout
+- `--branch` overrides the branch name for normal branch switching and
+  worktree runs
 - review-only mode does not switch branches
 - dirty working trees are rejected unless `--allow-dirty` is passed
 - completed full runs move the plan file to `completed/`

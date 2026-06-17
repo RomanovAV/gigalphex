@@ -24,11 +24,12 @@
   automatic initialization on first real plan creation or execution.
 - Bound executor runs with session timeout, retry count, retry delay, and review worker limit.
 - Validate git repository state, detect default branch, create/switch plan branch, and move completed plans.
+- Run full and tasks-only plan execution in an isolated git worktree with
+  `--worktree`.
 
 ## Intentionally deferred
 
 - Web dashboard.
-- Git worktree isolation.
 - Notifications.
 - External second-model review.
 - Docker wrapper.

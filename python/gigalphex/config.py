@@ -31,6 +31,7 @@ class Config:
     retry_delay: float = 2.0
     review_workers: int = 5
     create_branch: bool = True
+    worktree: bool = False
     move_plan_on_completion: bool = True
     commit_plan_on_creation: bool = True
     allow_dirty: bool = False
@@ -96,6 +97,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     cfg.retry_delay = section.getfloat("retry_delay", cfg.retry_delay)
     cfg.review_workers = section.getint("review_workers", cfg.review_workers)
     cfg.create_branch = section.getboolean("create_branch", cfg.create_branch)
+    cfg.worktree = section.getboolean("worktree", cfg.worktree)
     cfg.move_plan_on_completion = section.getboolean("move_plan_on_completion", cfg.move_plan_on_completion)
     cfg.commit_plan_on_creation = section.getboolean("commit_plan_on_creation", cfg.commit_plan_on_creation)
     cfg.allow_dirty = section.getboolean("allow_dirty", cfg.allow_dirty)
@@ -140,6 +142,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # retry_delay = 5
 # review_workers = 5
 # create_branch = true
+# worktree = false
 # move_plan_on_completion = true
 # commit_plan_on_creation = true
 # allow_dirty = false
@@ -149,6 +152,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 DEFAULT_GITIGNORE_LINES = [
     ".DS_Store",
     ".gigalphex/progress/",
+    ".gigalphex/worktrees/",
 ]
 
 

@@ -72,6 +72,10 @@ class GitService:
         proc = self.run("branch", "--show-current", check=False)
         return proc.stdout.strip()
 
+    def repo_root(self) -> Path:
+        proc = self.run("rev-parse", "--show-toplevel")
+        return Path(proc.stdout.strip()).resolve()
+
     def is_dirty(self) -> bool:
         proc = self.run("status", "--porcelain", check=True)
         return bool(proc.stdout.strip())
@@ -98,6 +102,30 @@ class GitService:
             return
         self.run("switch", "-c", branch)
 
+    def worktree_path(self, branch: str) -> Path:
+        return self.repo_root() / ".gigalphex" / "worktrees" / worktree_dir_name(branch)
+
+    def ensure_worktree(self, branch: str) -> Path:
+        if not branch:
+            raise GitError("branch name is required for worktree")
+        path = self.worktree_path(branch)
+        if path.exists():
+            probe = subprocess.run(
+                ["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if probe.returncode == 0 and probe.stdout.strip() == "true":
+                return path
+            raise GitError(f"worktree path exists but is not a git worktree: {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if self.branch_exists(branch):
+            self.run("worktree", "add", str(path), branch)
+        else:
+            self.run("worktree", "add", "-b", branch, str(path), "HEAD")
+        return path
+
     def commit_file(self, path: Path, message: str) -> None:
         self.run("add", "--", str(path))
         self.run("commit", "--only", "-m", message, "--", str(path))
@@ -123,6 +151,10 @@ def branch_name_from_plan(plan_file: Path) -> str:
         name = name[:-3]
     branch = DATE_PREFIX_RE.sub("", name).strip("-")
     return branch or name
+
+
+def worktree_dir_name(branch: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", branch).strip("-") or "plan"
 
 
 def move_plan_to_completed(plan_file: Path) -> Path:

@@ -17,6 +17,9 @@ class ConfigTest(unittest.TestCase):
     def test_created_plans_are_committed_by_default(self) -> None:
         self.assertTrue(Config().commit_plan_on_creation)
 
+    def test_worktree_is_disabled_by_default(self) -> None:
+        self.assertFalse(Config().worktree)
+
     def test_resolved_default_args_are_copied(self) -> None:
         first = Config().resolved_args
         first.append("--include-directories")

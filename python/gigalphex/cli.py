@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 from typing import Optional
@@ -38,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--default-branch", help="default branch for diffs")
     parser.add_argument("--branch", help="branch to create/switch to before running a plan")
     parser.add_argument("--no-branch", action="store_true", help="do not create/switch branches")
+    parser.add_argument("--worktree", action="store_true", help="run the plan in an isolated git worktree")
     parser.add_argument("--allow-dirty", action="store_true", help="allow starting with uncommitted changes")
     parser.add_argument("--no-move-plan", action="store_true", help="do not move completed plan to completed/")
     parser.add_argument("--no-commit-plan", action="store_true", help="do not commit newly created plans")
@@ -118,6 +120,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.default_branch = args.default_branch
     if args.no_branch:
         cfg.create_branch = False
+    if args.worktree:
+        cfg.worktree = True
     if args.allow_dirty:
         cfg.allow_dirty = True
     if args.no_move_plan:
@@ -181,6 +185,34 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("error: plan file is required unless --review is used", file=sys.stderr)
         return 2
 
+    git = GitService(Path("."))
+    worktree_path: Optional[Path] = None
+    if not args.dry_run:
+        try:
+            git.ensure_repo()
+            cfg.default_branch = git.default_branch(cfg.default_branch)
+            git.ensure_clean(cfg.allow_dirty)
+            if cfg.worktree and plan_file is not None and not args.review:
+                branch = args.branch or branch_name_from_plan(plan_file)
+                repo_root = git.repo_root()
+                try:
+                    plan_relative = plan_file.relative_to(repo_root)
+                except ValueError as exc:
+                    raise GitError(f"plan file must be inside the git repository for --worktree: {plan_file}") from exc
+                worktree_path = git.ensure_worktree(branch)
+                plan_file = worktree_path / plan_relative
+                if not plan_file.exists():
+                    raise GitError(f"plan file is not available in worktree; commit it first: {plan_relative}")
+                os.chdir(worktree_path)
+                git = GitService(Path("."))
+            elif cfg.create_branch and plan_file is not None and not args.review:
+                branch = args.branch or branch_name_from_plan(plan_file)
+                git.switch_or_create_branch(branch)
+        except GitError as exc:
+            hint = "; pass --init-git to initialize this directory first" if str(exc) == "not inside a git repository" else ""
+            print(f"error: {exc}{hint}", file=sys.stderr)
+            return 1
+
     progress_base = plan_file.stem if plan_file else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
@@ -211,20 +243,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_workers=cfg.review_workers,
         output=log.stream,
     )
-    git = GitService(Path("."))
-    if not args.dry_run:
-        try:
-            git.ensure_repo()
-            cfg.default_branch = git.default_branch(cfg.default_branch)
-            git.ensure_clean(cfg.allow_dirty)
-            if cfg.create_branch and plan_file is not None and not args.review:
-                branch = args.branch or branch_name_from_plan(plan_file)
-                git.switch_or_create_branch(branch)
-        except GitError as exc:
-            hint = "; pass --init-git to initialize this directory first" if str(exc) == "not inside a git repository" else ""
-            print(f"error: {exc}{hint}", file=sys.stderr)
-            return 1
-
     if not args.dry_run:
         log.section("startup")
         log.write(f"gigacode command: {task_executor.command_line()}\n")
@@ -238,7 +256,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"retry count: {cfg.retry_count}, retry delay: {cfg.retry_delay}s\n")
         log.write(f"review workers: {cfg.review_workers}\n")
         log.write(f"default branch: {cfg.default_branch}\n")
-        if cfg.create_branch and plan_file is not None and not args.review:
+        if worktree_path is not None:
+            log.write(f"worktree: {worktree_path}\n")
+            log.write(f"branch: {args.branch or branch_name_from_plan(plan_file)}\n")
+        elif cfg.create_branch and plan_file is not None and not args.review:
             log.write(f"branch: {args.branch or branch_name_from_plan(plan_file)}\n")
     options = RunOptions(
         plan_file=plan_file,
