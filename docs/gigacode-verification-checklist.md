@@ -185,6 +185,7 @@ Expected files:
 ~/.config/gigalphex/config
 ~/.config/gigalphex/prompts/finalize.txt
 ~/.config/gigalphex/prompts/make_plan.txt
+~/.config/gigalphex/prompts/plan_skill.txt
 ~/.config/gigalphex/prompts/review.txt
 ~/.config/gigalphex/prompts/review_agent.txt
 ~/.config/gigalphex/prompts/review_synthesis.txt
@@ -211,7 +212,38 @@ Expected:
 - Does not invoke `gigacode`.
 - Prints `progress log: .gigalphex/progress/progress-plan.txt`.
 
-## 6. Verify Real Plan Generation
+## 6. Install the Planning Skill
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --install-planning-skill
+```
+
+Expected:
+
+- Reports `installed planning skill` or `planning skill already installed`.
+- Creates `~/.gigacode/skills/planning/SKILL.md`.
+- Running the command again does not overwrite an identical installed copy.
+- A locally modified copy is preserved unless `--force-skill-install` is used.
+
+If this GigaCode version uses another directory:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli \
+  --install-planning-skill \
+  --skill-dir /actual/gigacode/skills/path
+```
+
+Persist the discovered path if necessary:
+
+```ini
+[gigalphex]
+gigacode_skills_dir = /actual/gigacode/skills/path
+```
+
+## 7. Verify Interactive Plan Generation
+
+This check requires the `planning` skill installed in GigaCode and a real
+terminal.
 
 From the repository root:
 
@@ -222,11 +254,24 @@ PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
 
 Expected:
 
+- GigaCode opens interactively instead of returning one one-shot response.
+- The `planning` skill inspects the repository and asks focused questions.
 - Creates a file like `docs/plans/YYYYMMDD-add-health-check-endpoint.md`.
 - The file contains a markdown plan.
 - The plan includes `# Plan:`, `## Overview`, `## Context`, and at least one `### Task 1:` section.
 - Task items use checkbox format: `- [ ] ...`.
 - The saved file does not wrap the whole plan in markdown code fences.
+- After exiting GigaCode, GigaLphEx reports the created path and commits it
+  when plan commits are enabled.
+
+If GigaCode does not accept a positional initial prompt, inspect
+`gigacode --help` and configure the equivalent syntax while preserving the
+placeholder:
+
+```ini
+[gigalphex]
+gigacode_interactive_args = <interactive flags> {prompt}
+```
 
 Notes:
 
@@ -234,7 +279,19 @@ Notes:
 
 ```
 
-## 7. Verify Repeated Plan Generation Does Not Overwrite
+## 8. Verify Quick Plan Generation
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add quick health check plan" --quick
+```
+
+Expected:
+
+- Uses the one-shot `make_plan.txt` prompt.
+- Does not require the interactive `planning` skill.
+- Creates a valid executable plan.
+
+## 9. Verify Repeated Plan Generation Does Not Overwrite
 
 Run the same command again:
 
@@ -254,7 +311,7 @@ Notes:
 
 ```
 
-## 8. Verify Custom `make_plan.txt`
+## 10. Verify Custom `make_plan.txt`
 
 From the repository root:
 
@@ -262,7 +319,7 @@ From the repository root:
 cd /path/to/gigalphex
 PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
 printf 'CUSTOM PLAN PROMPT: {plan_request}\n' > .gigalphex/prompts/make_plan.txt
-PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --dry-run
+PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --quick --dry-run
 ```
 
 Expected:
@@ -279,6 +336,8 @@ Notes:
 ## Things to Watch Closely
 
 - Does `gigacode` accept the generated prompt through `-p {prompt}`?
+- Does interactive GigaCode accept `{prompt}` as a positional initial prompt?
+- Does the installed `planning` skill create the exact requested plan path?
 - Does `--approval-mode=auto-edit --allowed-tools run_shell_command` avoid
   non-interactive approval failures?
 - Does any run hang without output?

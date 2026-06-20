@@ -97,6 +97,8 @@ Configure command shape:
 [gigalphex]
 gigacode_command = gigacode
 gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+gigacode_interactive_args = {prompt}
+gigacode_skills_dir = ~/.gigacode/skills
 default_branch =
 ```
 
@@ -116,5 +118,10 @@ PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
 Create a new plan:
 
 ```bash
+PYTHONPATH=python python3 -m gigalphex.cli --install-planning-skill
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
+
+With a terminal attached, plan creation invokes the installed GigaCode
+`planning` skill interactively. Use `--quick`, or run without a TTY, to use the
+one-shot `make_plan.txt` prompt.

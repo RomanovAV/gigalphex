@@ -17,6 +17,15 @@ class ConfigTest(unittest.TestCase):
             Config().resolved_args,
         )
 
+    def test_default_interactive_args_pass_initial_prompt_positionally(self) -> None:
+        self.assertEqual(["{prompt}"], Config().resolved_interactive_args)
+
+    def test_default_gigacode_skills_dir_uses_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                self.assertEqual(home / ".gigacode/skills", Config().gigacode_skills_dir)
+
     def test_created_plans_are_committed_by_default(self) -> None:
         self.assertTrue(Config().commit_plan_on_creation)
 
@@ -61,6 +70,31 @@ wait_on_rate_limit = 12.5
             self.assertEqual(["temporary one", "temporary two"], cfg.retry_patterns)
             self.assertEqual(["limit one", "limit two"], cfg.rate_limit_patterns)
             self.assertEqual(12.5, cfg.wait_on_rate_limit)
+
+    def test_load_config_reads_interactive_gigacode_args(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config"
+            config.write_text(
+                "[gigalphex]\ngigacode_interactive_args = --chat {prompt}\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                ["--chat", "{prompt}"],
+                load_config(config).resolved_interactive_args,
+            )
+
+    def test_load_config_reads_gigacode_skills_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config = tmp_path / "config"
+            skills_dir = tmp_path / "custom-skills"
+            config.write_text(
+                f"[gigalphex]\ngigacode_skills_dir = {skills_dir}\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(skills_dir, load_config(config).gigacode_skills_dir)
 
     def test_config_can_disable_finalize(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -173,6 +207,7 @@ wait_on_rate_limit = 12.5
 
             self.assertEqual("keep global task", existing.read_text(encoding="utf-8"))
             self.assertTrue((prompt_dir / "make_plan.txt").is_file())
+            self.assertTrue((prompt_dir / "plan_skill.txt").is_file())
             self.assertTrue((prompt_dir / "review_agent.txt").is_file())
             self.assertNotIn(existing, written)
 
@@ -199,6 +234,14 @@ wait_on_rate_limit = 12.5
                 "run_shell_command",
             ],
             cfg.args_for_phase("review"),
+        )
+
+    def test_interactive_plan_args_include_plan_model(self) -> None:
+        cfg = Config(plan_model="planning-model")
+
+        self.assertEqual(
+            ["--model", "planning-model", "{prompt}"],
+            cfg.args_for_interactive_plan(),
         )
 
     def test_review_model_falls_back_to_task_model(self) -> None:

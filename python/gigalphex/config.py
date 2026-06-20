@@ -7,7 +7,7 @@ import os
 import shlex
 from typing import Optional
 
-from .defaults import DEFAULT_GIGACODE_ARGS
+from .defaults import DEFAULT_GIGACODE_ARGS, DEFAULT_GIGACODE_INTERACTIVE_ARGS
 from .executor import DEFAULT_RATE_LIMIT_PATTERNS, DEFAULT_TRANSIENT_RETRY_PATTERNS
 from .prompts import init_prompt_templates
 
@@ -23,6 +23,8 @@ def global_config_dir() -> Path:
 class Config:
     gigacode_command: str = "gigacode"
     gigacode_args: Optional[list[str]] = None
+    gigacode_interactive_args: Optional[list[str]] = None
+    gigacode_skills_dir: Path = field(default_factory=lambda: Path.home() / ".gigacode/skills")
     plan_model: Optional[str] = None
     task_model: Optional[str] = None
     review_model: Optional[str] = None
@@ -52,6 +54,12 @@ class Config:
     def resolved_args(self) -> list[str]:
         return self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS.copy()
 
+    @property
+    def resolved_interactive_args(self) -> list[str]:
+        if self.gigacode_interactive_args is not None:
+            return self.gigacode_interactive_args
+        return DEFAULT_GIGACODE_INTERACTIVE_ARGS.copy()
+
     def args_for_phase(self, phase: str) -> list[str]:
         model = self.model_for_phase(phase)
         args = self.resolved_args
@@ -61,6 +69,13 @@ class Config:
 
     def args_for_review_agent(self) -> list[str]:
         return _without_approval_mode(self.args_for_phase("review"))
+
+    def args_for_interactive_plan(self) -> list[str]:
+        model = self.model_for_phase("plan")
+        args = self.resolved_interactive_args
+        if model:
+            return ["--model", model, *args]
+        return args
 
     def model_for_phase(self, phase: str) -> Optional[str]:
         if phase == "plan":
@@ -99,6 +114,11 @@ def load_config(path: Optional[Path] = None) -> Config:
     cfg.gigacode_command = section.get("gigacode_command", cfg.gigacode_command)
     if "gigacode_args" in section:
         cfg.gigacode_args = shlex.split(section.get("gigacode_args", ""))
+    if "gigacode_interactive_args" in section:
+        cfg.gigacode_interactive_args = shlex.split(section.get("gigacode_interactive_args", ""))
+    cfg.gigacode_skills_dir = Path(
+        section.get("gigacode_skills_dir", str(cfg.gigacode_skills_dir))
+    ).expanduser()
     cfg.plan_model = _optional_str(section.get("plan_model", cfg.plan_model))
     cfg.task_model = _optional_str(section.get("task_model", cfg.task_model))
     cfg.review_model = _optional_str(section.get("review_model", cfg.review_model))
@@ -136,6 +156,10 @@ def _apply_env(cfg: Config) -> Config:
         cfg.gigacode_command = command
     if args := os.getenv("GIGALPHEX_GIGACODE_ARGS"):
         cfg.gigacode_args = shlex.split(args)
+    if args := os.getenv("GIGALPHEX_GIGACODE_INTERACTIVE_ARGS"):
+        cfg.gigacode_interactive_args = shlex.split(args)
+    if skills_dir := os.getenv("GIGALPHEX_GIGACODE_SKILLS_DIR"):
+        cfg.gigacode_skills_dir = Path(skills_dir).expanduser()
     if model := os.getenv("GIGALPHEX_TASK_MODEL"):
         cfg.task_model = model
     if model := os.getenv("GIGALPHEX_REVIEW_MODEL"):
@@ -173,6 +197,8 @@ def _without_approval_mode(args: list[str]) -> list[str]:
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
 # gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+# gigacode_interactive_args = {prompt}
+# gigacode_skills_dir = ~/.gigacode/skills
 # plan_model =
 # task_model =
 # review_model =

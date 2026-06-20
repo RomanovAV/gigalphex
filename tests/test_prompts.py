@@ -11,6 +11,7 @@ from gigalphex.prompts import (
     PromptContext,
     load_prompt_templates,
     render_make_plan,
+    render_plan_skill,
     render_review_prompt,
     render_review_synthesis_prompt,
     render_task_prompt,
@@ -27,6 +28,18 @@ class PromptTemplatesTest(unittest.TestCase):
         self.assertIn("добавить поиск", prompt)
         self.assertIn("`### Задача N:`", prompt)
         self.assertIn("`## Обзор`", prompt)
+
+    def test_plan_skill_prompt_includes_request_and_exact_target(self) -> None:
+        prompt = render_plan_skill(
+            DEFAULT_PROMPTS.plan_skill,
+            "добавить поиск",
+            Path("docs/plans/20260620-search.md"),
+        )
+
+        self.assertIn("installed `planning` skill", prompt)
+        self.assertIn("добавить поиск", prompt)
+        self.assertIn("docs/plans/20260620-search.md", prompt)
+        self.assertIn("Do not implement", prompt)
 
     def test_task_render_supports_russian_headings_for_custom_templates(self) -> None:
         prompt = render_task_prompt(
@@ -109,6 +122,7 @@ class PromptTemplatesTest(unittest.TestCase):
 
             self.assertEqual("keep me", existing.read_text(encoding="utf-8"))
             self.assertTrue((prompt_dir / "make_plan.txt").exists())
+            self.assertTrue((prompt_dir / "plan_skill.txt").exists())
             self.assertIn(
                 "Write the entire plan in the same language as the user's request.",
                 (prompt_dir / "make_plan.txt").read_text(encoding="utf-8"),

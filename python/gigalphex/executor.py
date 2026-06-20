@@ -95,6 +95,24 @@ class GigaCodeExecutor:
     def run(self, prompt: str) -> ExecResult:
         return self._run_with_retries(prompt, self.output)
 
+    def run_interactive(self, prompt: str) -> ExecResult:
+        argv, stdin_prompt = self._build_invocation(prompt)
+        if stdin_prompt:
+            raise ValueError(
+                "interactive GigaCode args must include {prompt}; "
+                "configure gigacode_interactive_args"
+            )
+        try:
+            proc = subprocess.run(
+                argv,
+                timeout=self.timeout if self.timeout and self.timeout > 0 else None,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"gigacode command not found: {self.command}") from exc
+        except subprocess.TimeoutExpired:
+            return ExecResult(output="", returncode=-1, timed_out=True)
+        return ExecResult(output="", returncode=proc.returncode)
+
     def run_batch(self, prompts: dict[str, str]) -> dict[str, ExecResult]:
         if not prompts:
             return {}

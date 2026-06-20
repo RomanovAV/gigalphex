@@ -17,8 +17,8 @@ This is a small standalone rewrite of the useful ralphex core:
 - move completed plans into `completed/`
 - call `gigacode` through a configurable CLI boundary
 
-Current assumption: GigaCode CLI is available in `PATH`. By default
-`gigalphex` starts it in one-shot mode with:
+Current assumption: GigaCode CLI is available in `PATH`. Task, review,
+finalize, and quick-plan sessions use one-shot mode by default:
 
 ```bash
 gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
@@ -32,6 +32,24 @@ sent through stdin instead. In GigaCode 26.5.17, `--approval-mode=auto-edit`
 allows edit/write tools, while shell commands such as tests and `git commit`
 also require `--allowed-tools run_shell_command`. Output is streamed from
 combined stdout/stderr back to the terminal and progress log.
+
+Interactive plan creation is different. When stdin and stdout are attached to
+a terminal, `--plan` launches GigaCode with the generated skill request as a
+positional initial prompt and inherits the current terminal. This lets an
+installed `planning` skill inspect the repository and ask the user questions.
+Use `--quick` to force the original one-shot plan prompt. Non-TTY sessions,
+including CI, automatically use quick mode.
+
+Install the bundled planning skill once:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --install-planning-skill
+```
+
+The default destination is `~/.gigacode/skills/planning/SKILL.md`. Existing
+customized content is preserved; use `--force-skill-install` to replace it
+with the bundled version. For a GigaCode version using another skills
+directory, pass `--skill-dir PATH` or configure `gigacode_skills_dir`.
 
 Specialist and single-review sessions use `review_model`, remove the configured
 `--approval-mode` argument, and receive an explicit inspect-only prompt. The
@@ -111,6 +129,18 @@ Create a new executable plan:
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
 
+The default interactive mode requires the GigaCode `planning` skill. The skill
+creates the requested file under `docs/plans/`; after the GigaCode session
+exits, `gigalphex` verifies the file and commits it when configured to do so.
+If the installed GigaCode version needs different interactive CLI arguments,
+set `gigacode_interactive_args` while keeping a `{prompt}` placeholder.
+
+Create a plan without the skill or from automation:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication" --quick
+```
+
 Generated plans are requested entirely in the same language as the `--plan`
 text, including structural headings. Russian plans may use `# План`,
 `## Обзор`, `## Контекст`, `### Задача N:`, and `## Проверка`; they are parsed
@@ -167,6 +197,8 @@ Configure GigaCode:
 [gigalphex]
 gigacode_command = gigacode
 gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+gigacode_interactive_args = {prompt}
+gigacode_skills_dir = ~/.gigacode/skills
 task_model =
 review_model =
 default_branch =
@@ -197,7 +229,7 @@ Configuration loading priority, from lowest to highest:
 6. CLI arguments
 
 The global directory `~/.config/gigalphex/`, a commented
-`~/.config/gigalphex/config` template, and all six prompt templates under
+`~/.config/gigalphex/config` template, and all seven prompt templates under
 `~/.config/gigalphex/prompts/` are created automatically when the CLI starts.
 Existing global config and prompt files are never overwritten.
 
@@ -221,9 +253,17 @@ Prompt customization:
   `~/.config/gigalphex/prompts/`
 - `--init-prompts` creates project-specific overrides in
   `.gigalphex/prompts/`
-- both directories use `make_plan.txt`, `task.txt`, `review.txt`,
+- both directories use `make_plan.txt`, `plan_skill.txt`, `task.txt`, `review.txt`,
   `review_agent.txt`, `review_synthesis.txt`, and `finalize.txt`
 - loading priority is local prompts directory, then `~/.config/gigalphex/prompts`, then embedded defaults
+
+Planning skill:
+
+- `--install-planning-skill` installs the bundled skill globally
+- `--skill-dir PATH` overrides the configured GigaCode skills directory
+- `--force-skill-install` replaces an existing modified skill
+- interactive `--plan` checks for `<skills-dir>/planning/SKILL.md` before
+  launching GigaCode and suggests `--quick` when the skill is unavailable
 
 Model selection:
 

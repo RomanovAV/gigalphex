@@ -21,6 +21,7 @@ class PromptContext:
 @dataclass(frozen=True)
 class PromptTemplates:
     make_plan: str
+    plan_skill: str
     task: str
     review: str
     review_agent: str
@@ -94,6 +95,21 @@ Rules:
 - Prefer 2-6 tasks.
 - Include testing and validation in the task checkboxes.
 - Output only the markdown plan, with no surrounding commentary or code fences.
+"""
+
+PLAN_SKILL_PROMPT = """Use the installed `planning` skill to create a gigalphex-compatible implementation plan interactively.
+
+User request:
+
+{plan_request}
+
+Create exactly this plan file:
+{plan_path}
+
+Follow the skill's context discovery and focused question flow. Do not implement
+the plan or modify project files other than the plan file. Keep checkboxes only
+inside supported executable task sections. After the plan file is created,
+report its path and return control to the user.
 """
 
 PLAN_LOCALIZATION_GUIDANCE = """Plan localization compatibility:
@@ -189,6 +205,7 @@ Plain text output only.
 
 DEFAULT_PROMPTS = PromptTemplates(
     make_plan=MAKE_PLAN_PROMPT,
+    plan_skill=PLAN_SKILL_PROMPT,
     task=TASK_PROMPT,
     review=REVIEW_PROMPT,
     review_agent=REVIEW_AGENT_PROMPT,
@@ -198,6 +215,7 @@ DEFAULT_PROMPTS = PromptTemplates(
 
 PROMPT_FILES = {
     "make_plan": "make_plan.txt",
+    "plan_skill": "plan_skill.txt",
     "task": "task.txt",
     "review": "review.txt",
     "review_agent": "review_agent.txt",
@@ -252,6 +270,10 @@ def render_make_plan(template: str, plan_request: str) -> str:
         template.format(plan_request=plan_request),
         PLAN_LOCALIZATION_GUIDANCE,
     )
+
+
+def render_plan_skill(template: str, plan_request: str, plan_path: Path) -> str:
+    return template.format(plan_request=plan_request, plan_path=plan_path)
 
 
 REVIEW_AGENTS = {

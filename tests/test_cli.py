@@ -11,7 +11,13 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from gigalphex.cli import build_parser, main, should_auto_init
+from gigalphex.cli import (
+    build_parser,
+    find_interactively_created_plan,
+    main,
+    should_auto_init,
+    should_use_interactive_plan,
+)
 
 
 def write_script(path: Path, body: str) -> Path:
@@ -40,6 +46,7 @@ class CliTest(unittest.TestCase):
             self.assertTrue(config.is_file())
             self.assertIn("# task_model =", config.read_text(encoding="utf-8"))
             self.assertTrue((home / ".config/gigalphex/prompts/task.txt").is_file())
+            self.assertTrue((home / ".config/gigalphex/prompts/plan_skill.txt").is_file())
             self.assertTrue((home / ".config/gigalphex/prompts/review_synthesis.txt").is_file())
             self.assertFalse((project / ".gigalphex/prompts").exists())
 
@@ -80,6 +87,35 @@ class CliTest(unittest.TestCase):
         self.assertIsNone(parser.parse_args([]).finalize)
         self.assertTrue(parser.parse_args(["--finalize"]).finalize)
         self.assertFalse(parser.parse_args(["--no-finalize"]).finalize)
+
+    def test_quick_requires_plan(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(["--quick"])
+
+        self.assertEqual(2, code)
+        self.assertIn("--quick requires --plan", stderr.getvalue())
+
+    def test_force_skill_install_requires_install_command(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(["--force-skill-install"])
+
+        self.assertEqual(2, code)
+        self.assertIn("--force-skill-install requires", stderr.getvalue())
+
+    def test_interactive_plan_requires_tty_and_can_be_forced_quick(self) -> None:
+        interactive_args = build_parser().parse_args(["--plan", "add demo"])
+        quick_args = build_parser().parse_args(["--plan", "add demo", "--quick"])
+
+        with patch("sys.stdin.isatty", return_value=True), patch(
+            "sys.stdout.isatty",
+            return_value=True,
+        ):
+            self.assertTrue(should_use_interactive_plan(interactive_args))
+            self.assertFalse(should_use_interactive_plan(quick_args))
 
     def test_auto_init_includes_real_plan_creation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -340,6 +376,125 @@ print("- [ ] Do it")
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
             self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
+
+    def test_interactive_plan_uses_planning_skill_and_existing_terminal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            capture = tmp_path / "prompt.txt"
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+prompt = "\\n".join(sys.argv[1:])
+Path({str(capture)!r}).write_text(prompt)
+marker = "Create exactly this plan file:\\n"
+target = Path(prompt.split(marker, 1)[1].splitlines()[0])
+target.parent.mkdir(parents=True, exist_ok=True)
+target.write_text("# Plan: Demo\\n\\n### Task 1: Build\\n- [ ] Do it\\n")
+""",
+            )
+            installed_skill = home / ".gigacode/skills/planning/SKILL.md"
+            installed_skill.parent.mkdir(parents=True)
+            installed_skill.write_text("---\nname: planning\n---\n", encoding="utf-8")
+
+            try:
+                os.chdir(tmp_path)
+                stdout = io.StringIO()
+                with patch.dict(os.environ, {"HOME": str(home)}), patch(
+                    "gigalphex.cli.should_use_interactive_plan",
+                    return_value=True,
+                ), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            "--plan",
+                            "add demo feature",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            plans = list((tmp_path / "docs/plans").glob("*.md"))
+            prompt = capture.read_text(encoding="utf-8")
+            self.assertEqual(0, code)
+            self.assertEqual(1, len(plans))
+            self.assertIn("installed `planning` skill", prompt)
+            self.assertIn("add demo feature", prompt)
+            self.assertIn(str(plans[0].relative_to(tmp_path)), prompt)
+            self.assertIn(f"created plan: {plans[0].relative_to(tmp_path)}", stdout.getvalue())
+
+    def test_interactive_plan_reports_missing_planning_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(tmp_path)
+                stderr = io.StringIO()
+                with patch.dict(os.environ, {"HOME": str(home)}), patch(
+                    "gigalphex.cli.should_use_interactive_plan",
+                    return_value=True,
+                ), contextlib.redirect_stderr(stderr):
+                    code = main(["--plan", "add demo feature"])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(2, code)
+            self.assertIn("planning skill not found", stderr.getvalue())
+            self.assertIn("--install-planning-skill", stderr.getvalue())
+            self.assertIn("--quick", stderr.getvalue())
+            self.assertFalse((tmp_path / ".gigalphex").exists())
+
+    def test_install_planning_skill_to_explicit_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            skills_dir = tmp_path / "skills"
+            stdout = io.StringIO()
+
+            with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(stdout):
+                code = main(["--install-planning-skill", "--skill-dir", str(skills_dir)])
+
+            skill = skills_dir / "planning/SKILL.md"
+            self.assertEqual(0, code)
+            self.assertTrue(skill.is_file())
+            self.assertIn("name: planning", skill.read_text(encoding="utf-8"))
+            self.assertIn(f"installed planning skill: {skill}", stdout.getvalue())
+
+    def test_install_planning_skill_preserves_modified_existing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            skills_dir = tmp_path / "skills"
+            skill = skills_dir / "planning/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text("custom skill\n", encoding="utf-8")
+            stderr = io.StringIO()
+
+            with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stderr(stderr):
+                code = main(["--install-planning-skill", "--skill-dir", str(skills_dir)])
+
+            self.assertEqual(1, code)
+            self.assertEqual("custom skill\n", skill.read_text(encoding="utf-8"))
+            self.assertIn("--force-skill-install", stderr.getvalue())
+
+    def test_interactive_plan_accepts_one_new_file_when_skill_changes_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "docs/plans"
+            plans_dir.mkdir(parents=True)
+            existing = plans_dir / "existing.md"
+            existing.write_text("# Existing\n", encoding="utf-8")
+            expected = plans_dir / "expected.md"
+            actual = plans_dir / "actual.md"
+            actual.write_text("# Actual\n", encoding="utf-8")
+
+            found = find_interactively_created_plan(expected, {existing})
+
+            self.assertEqual(actual, found)
 
     def test_plan_creation_can_initialize_git_repository_before_commit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

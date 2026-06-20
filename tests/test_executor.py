@@ -96,6 +96,34 @@ print("ok")
             self.assertEqual(["--prompt=prompt body"], captured["argv"])
             self.assertEqual("", captured["stdin"])
 
+    def test_interactive_run_passes_initial_prompt_as_argument(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_file = Path(tmp) / "capture.json"
+            script = write_script(
+                Path(tmp) / "capture.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import json
+import sys
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:]}}))
+""",
+            )
+
+            result = GigaCodeExecutor(
+                command=str(script),
+                args=["--interactive", "{prompt}"],
+            ).run_interactive("use planning skill")
+            captured = json.loads(output_file.read_text(encoding="utf-8"))
+
+            self.assertTrue(result.ok)
+            self.assertEqual(["--interactive", "use planning skill"], captured["argv"])
+
+    def test_interactive_run_requires_prompt_placeholder(self) -> None:
+        executor = GigaCodeExecutor(command="gigacode", args=["--interactive"])
+
+        with self.assertRaisesRegex(ValueError, "must include \\{prompt\\}"):
+            executor.run_interactive("use planning skill")
+
     def test_adds_trailing_newline_to_streamed_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             script = write_script(

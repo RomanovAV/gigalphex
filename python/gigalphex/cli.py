@@ -17,8 +17,9 @@ from .executor import GigaCodeExecutor
 from .git import GitError, GitService, branch_name_from_plan, move_plan_to_completed
 from .planner import clean_plan_output, next_plan_path
 from .progress import ProgressLog
-from .prompts import load_prompt_templates, render_make_plan
+from .prompts import load_prompt_templates, render_make_plan, render_plan_skill
 from .runner import RunOptions, Runner
+from .skills import install_planning_skill, planning_skill_installed, planning_skill_path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,7 +33,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="create local .gigalphex prompt templates that override global prompts",
     )
     parser.add_argument("--init-git", action="store_true", help="run git init first when current directory is not a git repository")
+    parser.add_argument(
+        "--install-planning-skill",
+        action="store_true",
+        help="install the bundled planning skill for GigaCode",
+    )
+    parser.add_argument(
+        "--force-skill-install",
+        action="store_true",
+        help="overwrite an existing modified planning skill",
+    )
+    parser.add_argument(
+        "--skill-dir",
+        type=Path,
+        help="GigaCode skills directory, default: ~/.gigacode/skills",
+    )
     parser.add_argument("--plan", help="create a markdown execution plan for this request")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="create a plan non-interactively with the one-shot plan prompt",
+    )
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
     parser.add_argument("--plan-model", help="GigaCode model for plan creation; falls back to task model")
@@ -98,6 +119,37 @@ def completed_plan_commit_message(plan_path: Path) -> str:
     return f"docs: complete plan {plan_path.stem}"
 
 
+def should_use_interactive_plan(args: argparse.Namespace) -> bool:
+    return bool(
+        args.plan
+        and not args.quick
+        and not args.dry_run
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    )
+
+
+def find_interactively_created_plan(
+    expected_path: Path,
+    existing_paths: set[Path],
+) -> Path:
+    if expected_path.is_file():
+        return expected_path
+    created = sorted(
+        path
+        for path in expected_path.parent.glob("*.md")
+        if path not in existing_paths
+    )
+    if len(created) == 1:
+        return created[0]
+    if not created:
+        raise RuntimeError(
+            f"interactive planning finished without creating the expected plan: {expected_path}"
+        )
+    joined = ", ".join(str(path) for path in created)
+    raise RuntimeError(f"interactive planning created multiple plan files: {joined}")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     try:
         init_global_config()
@@ -106,6 +158,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"warning: could not initialize global gigalphex files: {exc}", file=sys.stderr)
 
     args = build_parser().parse_args(argv)
+    if args.force_skill_install and not args.install_planning_skill:
+        print("error: --force-skill-install requires --install-planning-skill", file=sys.stderr)
+        return 2
+    if args.quick and not args.plan:
+        print("error: --quick requires --plan", file=sys.stderr)
+        return 2
     if args.base_ref and not args.review:
         print("error: --base-ref requires --review", file=sys.stderr)
         return 2
@@ -125,6 +183,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             print("requested gigalphex files already initialized")
         return 0
+
+    if should_use_interactive_plan(args):
+        planning_cfg = load_config(args.config)
+        if args.skill_dir:
+            planning_cfg.gigacode_skills_dir = args.skill_dir.expanduser()
+        if not planning_skill_installed(planning_cfg.gigacode_skills_dir):
+            expected_skill = planning_skill_path(planning_cfg.gigacode_skills_dir)
+            print(f"error: GigaCode planning skill not found: {expected_skill}", file=sys.stderr)
+            install_command = "gigalphex --install-planning-skill"
+            if args.skill_dir:
+                install_command += f" --skill-dir {planning_cfg.gigacode_skills_dir}"
+            print(f"install it with: {install_command}", file=sys.stderr)
+            print("or use --quick for non-interactive plan creation", file=sys.stderr)
+            return 2
 
     auto_init_written: list[Path] = []
     auto_init_started_clean = False
@@ -147,6 +219,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.gigacode_command:
         cfg.gigacode_command = args.gigacode_command
+    if args.skill_dir:
+        cfg.gigacode_skills_dir = args.skill_dir.expanduser()
     if args.gigacode_arg:
         cfg.gigacode_args = [*cfg.resolved_args, *args.gigacode_arg]
     if args.plan_model:
@@ -194,12 +268,38 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.finalize is not None:
         cfg.finalize_enabled = args.finalize
 
+    if args.install_planning_skill:
+        try:
+            skill_path, written = install_planning_skill(
+                cfg.gigacode_skills_dir,
+                force=args.force_skill_install,
+            )
+        except FileExistsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            print("re-run with --force-skill-install to overwrite it", file=sys.stderr)
+            return 1
+        except OSError as exc:
+            print(f"error: could not install planning skill: {exc}", file=sys.stderr)
+            return 1
+        if written:
+            print(f"installed planning skill: {skill_path}")
+        else:
+            print(f"planning skill already installed: {skill_path}")
+        return 0
+
     if args.plan:
         progress_file = cfg.progress_dir / "progress-plan.txt"
         log = ProgressLog(progress_file)
+        interactive = should_use_interactive_plan(args)
+        plan_path = next_plan_path(cfg.plans_dir, args.plan)
+        existing_plan_paths = set(cfg.plans_dir.glob("*.md"))
         executor = GigaCodeExecutor(
             command=cfg.gigacode_command,
-            args=cfg.args_for_phase("plan"),
+            args=(
+                cfg.args_for_interactive_plan()
+                if interactive
+                else cfg.args_for_phase("plan")
+            ),
             timeout=cfg.session_timeout,
             idle_timeout=cfg.idle_timeout,
             retry_count=cfg.retry_count,
@@ -210,7 +310,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             max_workers=cfg.review_workers,
             output=log.stream,
         )
-        prompt = render_make_plan(prompts.make_plan, args.plan)
+        prompt = (
+            render_plan_skill(prompts.plan_skill, args.plan, plan_path)
+            if interactive
+            else render_make_plan(prompts.make_plan, args.plan)
+        )
         if args.dry_run:
             log.section("make plan prompt")
             log.stream(prompt)
@@ -220,11 +324,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             log.section("make plan")
             log.write(f"gigacode command: {executor.command_line()}\n")
-            result = executor.run(prompt)
+            if interactive:
+                log.write(f"interactive plan target: {plan_path}\n")
+                print(f"starting interactive GigaCode planning session for: {plan_path}")
+                print("exit GigaCode after the planning skill creates the plan file")
+                result = executor.run_interactive(prompt)
+            else:
+                result = executor.run(prompt)
             if not result.ok:
                 raise RuntimeError(f"gigacode plan session exited with status {result.returncode}")
-            plan_path = next_plan_path(cfg.plans_dir, args.plan)
-            plan_path.write_text(clean_plan_output(result.output), encoding="utf-8")
+            if interactive:
+                created_path = find_interactively_created_plan(plan_path, existing_plan_paths)
+                if created_path != plan_path:
+                    log.write(
+                        f"interactive skill used a different plan path: {created_path}\n"
+                    )
+                plan_path = created_path
+            else:
+                plan_path.write_text(clean_plan_output(result.output), encoding="utf-8")
             log.write(f"created plan: {plan_path}\n")
             if cfg.commit_plan_on_creation:
                 git = GitService(Path("."))

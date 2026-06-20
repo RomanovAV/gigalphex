@@ -54,11 +54,34 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init
 
 ## Рекомендуемый сценарий: план -> проверка -> выполнение
 
+Один раз установите встроенный skill планирования:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --install-planning-skill
+```
+
+По умолчанию он устанавливается в
+`~/.gigacode/skills/planning/SKILL.md`. Если ваша версия GigaCode использует
+другой каталог, передайте `--skill-dir PATH`.
+
 1. Сформулируйте задачу как обычный рабочий запрос:
 
 ```bash
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --plan "добавить health check endpoint"
 ```
+
+В обычном терминале команда запускает установленный в GigaCode skill
+`planning`: он исследует репозиторий и задает уточняющие вопросы. После
+создания файла завершите сессию GigaCode, чтобы GigaLphEx проверил и при
+необходимости закоммитил план.
+
+Для прежней одношаговой генерации без skill используйте:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --plan "добавить health check endpoint" --quick
+```
+
+При запуске без TTY, например в CI, quick-режим выбирается автоматически.
 
 2. Откройте созданный файл в `docs/plans/`. Хороший план обычно содержит:
 

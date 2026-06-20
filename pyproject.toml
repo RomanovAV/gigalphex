@@ -17,3 +17,6 @@ package-dir = {"" = "python"}
 
 [tool.setuptools.packages.find]
 where = ["python"]
+
+[tool.setuptools.package-data]
+gigalphex = ["assets/planning/SKILL.md"]
