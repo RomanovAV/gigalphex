@@ -15,9 +15,9 @@ class ConfigTest(unittest.TestCase):
     def test_default_args_enable_noninteractive_auto_edit(self) -> None:
         self.assertEqual(
             [
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
-                "{prompt}",
             ],
             Config().resolved_args,
         )
@@ -292,9 +292,9 @@ Plain text output only.
 
         self.assertEqual(
             [
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
-                "{prompt}",
             ],
             Config().resolved_args,
         )
@@ -306,9 +306,9 @@ Plain text output only.
             [
                 "--model",
                 "strong-review",
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
-                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -334,9 +334,9 @@ Plain text output only.
             [
                 "--model",
                 "shared-model",
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
-                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -348,9 +348,9 @@ Plain text output only.
             [
                 "--model",
                 "code-model",
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
-                "{prompt}",
             ],
             cfg.args_for_phase("synthesis"),
         )
@@ -362,8 +362,8 @@ Plain text output only.
             [
                 "--model",
                 "review-model",
-                "--allowed-tools=run_shell_command",
                 "{prompt}",
+                "--allowed-tools=run_shell_command",
             ],
             cfg.args_for_review_agent(),
         )

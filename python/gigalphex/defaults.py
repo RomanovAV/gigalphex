@@ -1,7 +1,7 @@
 DEFAULT_GIGACODE_ARGS = [
+    "{prompt}",
     "--approval-mode=auto-edit",
     "--allowed-tools=run_shell_command",
-    "{prompt}",
 ]
 DEFAULT_GIGACODE_INTERACTIVE_ARGS = [
     "--prompt-interactive",

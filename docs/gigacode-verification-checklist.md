@@ -128,7 +128,7 @@ Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
 - The startup section logs
-  `gigacode --approval-mode=auto-edit --allowed-tools=run_shell_command '<prompt>'`,
+  `gigacode '<prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.

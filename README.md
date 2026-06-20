@@ -21,19 +21,24 @@ Current assumption: GigaCode CLI is available in `PATH`. Task, review,
 finalize, and quick-plan sessions use one-shot mode by default:
 
 ```bash
-gigacode --approval-mode=auto-edit --allowed-tools=run_shell_command '<generated prompt>'
+gigacode '<generated prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command
 ```
 
 The default argument template is
-`--approval-mode=auto-edit --allowed-tools=run_shell_command {prompt}`.
+`{prompt} --approval-mode=auto-edit --allowed-tools=run_shell_command`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
-GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex appends
+GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex prepends
 the generated prompt as the positional `query`. This follows GigaCode's current
 help; `-p/--prompt` remains supported by GigaCode but is deprecated. In
 GigaCode 26.5.17, `--approval-mode=auto-edit` allows edit/write tools, while
 shell commands such as tests and `git commit` also require
 `--allowed-tools=run_shell_command`. Output is streamed from combined
 stdout/stderr back to the terminal and progress log.
+
+The positional query is deliberately placed before array-valued options such
+as `--allowed-tools` and `--include-directories`; otherwise GigaCode's argument
+parser can consume the query as another array value and report that no input
+was provided.
 
 Interactive plan creation is different. When stdin and stdout are attached to
 a terminal, `--plan` launches GigaCode with
@@ -209,7 +214,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = --approval-mode=auto-edit --allowed-tools=run_shell_command {prompt}
+gigacode_args = {prompt} --approval-mode=auto-edit --allowed-tools=run_shell_command
 gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 gigacode_skills_dir = ~/.gigacode/skills
 task_model =

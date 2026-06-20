@@ -38,9 +38,9 @@ print("ok")
             self.assertTrue(result.ok)
             self.assertEqual(
                 [
+                    "prompt body",
                     "--approval-mode=auto-edit",
                     "--allowed-tools=run_shell_command",
-                    "prompt body",
                 ],
                 captured["argv"],
             )
@@ -50,12 +50,12 @@ print("ok")
         executor = GigaCodeExecutor(command="gigacode")
 
         self.assertEqual(
-            "gigacode --approval-mode=auto-edit "
-            "--allowed-tools=run_shell_command '<prompt>'",
+            "gigacode '<prompt>' --approval-mode=auto-edit "
+            "--allowed-tools=run_shell_command",
             executor.command_line(),
         )
 
-    def test_custom_args_without_prompt_placeholder_append_positional_prompt(self) -> None:
+    def test_custom_args_without_prompt_placeholder_prepend_positional_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_file = Path(tmp) / "capture.json"
             script = write_script(
@@ -77,13 +77,13 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["--debug", "prompt body"], captured["argv"])
+            self.assertEqual(["prompt body", "--debug"], captured["argv"])
             self.assertEqual("", captured["stdin"])
 
-    def test_command_line_shows_appended_positional_prompt(self) -> None:
+    def test_command_line_shows_prepended_positional_prompt(self) -> None:
         executor = GigaCodeExecutor(command="gigacode", args=["--debug"])
 
-        self.assertEqual("gigacode --debug '<prompt>'", executor.command_line())
+        self.assertEqual("gigacode '<prompt>' --debug", executor.command_line())
 
     def test_legacy_prompt_flag_can_embed_prompt_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

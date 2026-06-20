@@ -130,7 +130,7 @@ class GigaCodeExecutor:
     def command_line(self) -> str:
         safe_args = [arg.replace("{prompt}", "<prompt>") for arg in self.args]
         if not any("{prompt}" in arg for arg in self.args):
-            safe_args.append("<prompt>")
+            safe_args.insert(0, "<prompt>")
         return shlex.join([self.command, *safe_args])
 
     def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
@@ -268,7 +268,7 @@ class GigaCodeExecutor:
         if not used_placeholder:
             if require_placeholder:
                 return [self.command, *args], prompt
-            args.append(prompt)
+            args.insert(0, prompt)
         return [self.command, *args], ""
 
 

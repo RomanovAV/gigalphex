@@ -28,19 +28,19 @@ def write_script(path: Path, body: str) -> Path:
 
 
 class CliTest(unittest.TestCase):
-    def test_extra_gigacode_args_are_inserted_before_positional_prompt(self) -> None:
+    def test_extra_gigacode_args_are_appended_after_positional_prompt(self) -> None:
         self.assertEqual(
             [
+                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
                 "--include-directories=/workspace/shared",
-                "{prompt}",
             ],
             add_gigacode_args(
                 [
+                    "{prompt}",
                     "--approval-mode=auto-edit",
                     "--allowed-tools=run_shell_command",
-                    "{prompt}",
                 ],
                 ["--include-directories=/workspace/shared"],
             ),
@@ -49,9 +49,9 @@ class CliTest(unittest.TestCase):
     def test_extra_gigacode_args_do_not_split_legacy_prompt_flag_and_value(self) -> None:
         self.assertEqual(
             [
-                "--include-directories=/workspace/shared",
                 "-p",
                 "{prompt}",
+                "--include-directories=/workspace/shared",
             ],
             add_gigacode_args(
                 ["-p", "{prompt}"],
