@@ -107,6 +107,10 @@ class GitService:
         proc = self.run("rev-parse", "--verify", "--quiet", branch, check=False)
         return proc.returncode == 0
 
+    def ensure_ref_exists(self, ref: str) -> None:
+        if not self.branch_exists(ref):
+            raise GitError(f"git ref not found: {ref}")
+
     def switch_or_create_branch(self, branch: str) -> None:
         if not branch:
             return

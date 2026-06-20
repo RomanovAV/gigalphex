@@ -15,6 +15,7 @@ from .prompts import (
     PromptTemplates,
     render,
     render_review_agent_prompt,
+    render_review_prompt,
     render_review_synthesis_prompt,
 )
 from .signals import ALL_TASKS_DONE, REVIEW_DONE, TASK_FAILED
@@ -43,11 +44,13 @@ class Runner:
         executor: GigaCodeExecutor,
         log: ProgressLog,
         review_executor: Optional[GigaCodeExecutor] = None,
+        review_agent_executor: Optional[GigaCodeExecutor] = None,
         finalize_executor: Optional[GigaCodeExecutor] = None,
     ) -> None:
         self.options = options
         self.executor = executor
         self.review_executor = review_executor or executor
+        self.review_agent_executor = review_agent_executor or self.review_executor
         self.finalize_executor = finalize_executor or self.review_executor
         self.log = log
 
@@ -93,15 +96,28 @@ class Runner:
             return
 
         context = self._context()
-        prompt = render(self.options.prompts.review, context)
+        prompt = render_review_prompt(self.options.prompts.review, context)
         for iteration in range(1, self.options.review_iterations + 1):
             self.log.section(f"review iteration {iteration}")
-            result = self.review_executor.run(prompt)
+            result = self.review_agent_executor.run(prompt)
             if not result.ok:
                 raise RuntimeError(describe_failure("gigacode review session", result))
             if result.signal == TASK_FAILED:
                 raise RuntimeError("review failed")
-            if result.signal == REVIEW_DONE:
+
+            self.log.section("review synthesis")
+            synthesis = self.review_executor.run(
+                render_review_synthesis_prompt(
+                    self.options.prompts.review_synthesis,
+                    {"review": result.output},
+                    context,
+                )
+            )
+            if not synthesis.ok:
+                raise RuntimeError(describe_failure("gigacode review synthesis", synthesis))
+            if synthesis.signal == TASK_FAILED:
+                raise RuntimeError("review failed")
+            if synthesis.signal == REVIEW_DONE:
                 return
             time.sleep(self.options.delay_seconds)
         raise RuntimeError(f"max review iterations reached: {self.options.review_iterations}")
@@ -114,7 +130,7 @@ class Runner:
                 name: render_review_agent_prompt(self.options.prompts.review_agent, name, focus, context)
                 for name, focus in REVIEW_AGENTS.items()
             }
-            results = self.review_executor.run_batch(prompts)
+            results = self.review_agent_executor.run_batch(prompts)
             findings: dict[str, str] = {}
             for name in REVIEW_AGENTS:
                 result = results[name]
@@ -159,8 +175,8 @@ class Runner:
                     )
                 self.log.stream("\n--- review synthesis prompt uses collected agent findings ---\n")
             else:
-                self.log.stream(render(self.options.prompts.review, context))
-                self.log.stream("\n")
+                self.log.stream(render_review_prompt(self.options.prompts.review, context))
+                self.log.stream("\n--- review synthesis prompt uses reviewer findings ---\n")
         if self.options.finalize_enabled:
             self.log.section("finalize prompt")
             self.log.stream(render(self.options.prompts.finalize, context))

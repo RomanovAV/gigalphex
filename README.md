@@ -32,6 +32,11 @@ allows edit/write tools, while shell commands such as tests and `git commit`
 also require `--allowed-tools run_shell_command`. Output is streamed from
 combined stdout/stderr back to the terminal and progress log.
 
+Specialist and single-review sessions remove the configured `--approval-mode`
+argument and receive an explicit inspect-only prompt. The synthesis session
+keeps the normal editable invocation and is the only review stage allowed to
+fix files or create commits.
+
 Observed GigaCode constraints:
 
 - GigaCode edits only inside its configured workspace. To let it work across
@@ -119,6 +124,12 @@ PYTHONPATH=python python3 -m gigalphex.cli --review --review-model <model-name>
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md --review-model <model-name>
 ```
 
+Review the current `HEAD` against an explicit branch or other Git ref:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --review --base-ref develop
+```
+
 Run tests:
 
 ```bash
@@ -129,7 +140,13 @@ Review behavior:
 
 - default: parallel review with `quality`, `implementation`, `testing`,
   `simplification`, and `documentation` agents
-- fallback: pass `--no-parallel-review` to use a single review prompt
+- pass `--base-ref REF` to compare `REF...HEAD`; without it, the default branch
+  is auto-detected
+- reviewers only inspect and report findings; they do not edit or commit
+- synthesis verifies reported findings and is the only stage that may fix,
+  test, and commit changes
+- fallback: pass `--no-parallel-review` to use one read-only reviewer followed
+  by the same synthesis stage
 - limit fan-out with `--review-workers N`
 - kill stuck sessions with `--session-timeout SECONDS`
 - kill silent sessions with `--idle-timeout SECONDS`
@@ -185,6 +202,8 @@ Git behavior:
 - `--branch` overrides the branch name for normal branch switching and
   worktree runs
 - review-only mode does not switch branches
+- `--review --base-ref REF` validates the ref and compares it with the current
+  `HEAD`
 - dirty working trees are rejected unless `--allow-dirty` is passed
 - completed full runs move the plan file to `completed/`
 - use `--no-branch` or `--no-move-plan` to disable those steps

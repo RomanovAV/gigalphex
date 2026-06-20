@@ -59,6 +59,9 @@ class Config:
             return ["--model", model, *args]
         return args
 
+    def args_for_review_agent(self) -> list[str]:
+        return _without_approval_mode(self.args_for_phase("review"))
+
     def model_for_phase(self, phase: str) -> Optional[str]:
         if phase == "plan":
             return self.plan_model or self.task_model
@@ -147,6 +150,22 @@ def _optional_str(value: Optional[str]) -> Optional[str]:
 
 def _csv_list(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _without_approval_mode(args: list[str]) -> list[str]:
+    filtered: list[str] = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--approval-mode":
+            index += 2
+            continue
+        if arg.startswith("--approval-mode="):
+            index += 1
+            continue
+        filtered.append(arg)
+        index += 1
+    return filtered
 
 
 DEFAULT_CONFIG_TEXT = """[gigalphex]

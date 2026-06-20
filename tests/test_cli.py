@@ -396,8 +396,13 @@ print("- [ ] Do it")
                 f"""#!/usr/bin/env python3
 from pathlib import Path
 import sys
-Path({str(capture)!r}).write_text("\\n".join(sys.argv[1:]) + "\\nSTDIN\\n" + sys.stdin.read())
-print("<<<GIGALPHEX:REVIEW_DONE>>>")
+prompt = "\\n".join(sys.argv[1:]) + "\\nSTDIN\\n" + sys.stdin.read()
+with Path({str(capture)!r}).open("a") as fh:
+    fh.write(prompt)
+if "specialist review agents have returned" in prompt:
+    print("<<<GIGALPHEX:REVIEW_DONE>>>")
+else:
+    print("NO FINDINGS")
 """,
             )
 
@@ -421,6 +426,59 @@ print("<<<GIGALPHEX:REVIEW_DONE>>>")
             self.assertEqual(0, code)
             self.assertIn("git diff master...HEAD", captured_prompt)
             self.assertNotIn("git diff main...HEAD", captured_prompt)
+
+    def test_review_uses_explicit_base_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            capture = tmp_path / "prompt.txt"
+            home = tmp_path / "home"
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+prompt = "\\n".join(sys.argv[1:]) + "\\nSTDIN\\n" + sys.stdin.read()
+with Path({str(capture)!r}).open("a") as fh:
+    fh.write(prompt)
+if "specialist review agents have returned" in prompt:
+    print("<<<GIGALPHEX:REVIEW_DONE>>>")
+else:
+    print("NO FINDINGS")
+""",
+            )
+
+            try:
+                os.chdir(repo)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                Path("README.md").write_text("# Demo\n", encoding="utf-8")
+                subprocess.run(["git", "add", "README.md"], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+                subprocess.run(["git", "branch", "release"], check=True)
+
+                stdout = io.StringIO()
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            "--review",
+                            "--base-ref",
+                            "release",
+                            "--no-parallel-review",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            captured_prompt = capture.read_text(encoding="utf-8")
+            self.assertEqual(0, code)
+            self.assertIn("git diff release...HEAD", captured_prompt)
+            self.assertIn("current branch vs release", captured_prompt)
 
     def test_successful_plan_run_commits_completed_plan_move_and_ignores_progress(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

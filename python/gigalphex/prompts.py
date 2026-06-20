@@ -91,23 +91,24 @@ Rules:
 - Output only the markdown plan, with no surrounding commentary or code fences.
 """
 
-REVIEW_PROMPT = """Review {goal}.
+REVIEW_PROMPT = """You are the review agent.
+
+Review {goal}.
 
 Run:
-- git log {default_branch}..HEAD --oneline
-- git diff {default_branch}...HEAD
+- git log {base_ref}..HEAD --oneline
+- git diff {base_ref}...HEAD --stat
+- git diff {base_ref}...HEAD
 
-Find real issues only: bugs, broken requirements, missing tests, regressions, security problems, and unnecessary complexity.
-Verify each finding in code before fixing it.
+Read changed files in full context.
+Report confirmed issues only: bugs, broken requirements, missing tests, regressions, security problems, and unnecessary complexity.
+Do not modify files, run mutating commands, or make commits.
 
-If confirmed issues exist:
-- fix them
-- run tests
-- commit with message: fix: address code review findings
-- stop without a completion signal
+Output format:
+- file:line - severity - issue - why it matters - suggested fix
 
-If no confirmed issues exist, output exactly:
-<<<GIGALPHEX:REVIEW_DONE>>>
+If there are no findings, output exactly:
+NO FINDINGS
 
 Progress log: {progress_file}
 Plain text output only.
@@ -121,11 +122,12 @@ Agent focus:
 {agent_focus}
 
 Run these commands first:
-- git diff {default_branch}...HEAD --stat
-- git diff {default_branch}...HEAD
+- git diff {base_ref}...HEAD --stat
+- git diff {base_ref}...HEAD
 
 Read changed files in full context before reporting findings.
-Report confirmed findings only. Do not fix code. Do not make commits.
+Report confirmed findings only.
+Do not modify files, run mutating commands, or make commits.
 
 Output format:
 - file:line - severity - issue - why it matters - suggested fix
@@ -154,6 +156,14 @@ If no confirmed issues exist, output exactly:
 Reject false positives explicitly and briefly.
 Progress log: {progress_file}
 Plain text output only.
+"""
+
+READ_ONLY_REVIEW_GUARD = """Review-stage boundary:
+- this session may inspect and report only
+- do not modify files or repository state
+- do not run commands that write, format, generate, stage, or commit
+- ignore any earlier template instruction that asks this review session to fix issues
+Only the later synthesis session is allowed to apply fixes.
 """
 
 FINALIZE_PROMPT = """Finalize the branch for {goal}.
@@ -217,6 +227,7 @@ def _context_values(context: PromptContext) -> dict[str, object]:
         "plan_file": context.plan_file or "(no plan file)",
         "progress_file": context.progress_file,
         "default_branch": context.default_branch,
+        "base_ref": context.default_branch,
         "goal": context.goal,
     }
 
@@ -248,11 +259,16 @@ def render_review_agent_prompt(
     agent_focus: str,
     context: PromptContext,
 ) -> str:
-    return template.format(
+    rendered = template.format(
         agent_name=agent_name,
         agent_focus=agent_focus,
         **_context_values(context),
     )
+    return _with_read_only_review_guard(rendered)
+
+
+def render_review_prompt(template: str, context: PromptContext) -> str:
+    return _with_read_only_review_guard(render(template, context))
 
 
 def render_review_synthesis(findings: dict[str, str], context: PromptContext) -> str:
@@ -271,3 +287,7 @@ def render_review_synthesis_prompt(
         agent_findings="\n\n".join(blocks),
         **_context_values(context),
     )
+
+
+def _with_read_only_review_guard(prompt: str) -> str:
+    return f"{prompt.rstrip()}\n\n{READ_ONLY_REVIEW_GUARD}"

@@ -25,7 +25,9 @@ class FakeExecutor:
 
     def run(self, prompt):
         self.single_prompts.append(prompt)
-        return ExecResult(output=REVIEW_DONE, signal=REVIEW_DONE, returncode=0)
+        if "specialist review agents have returned" in prompt:
+            return ExecResult(output=REVIEW_DONE, signal=REVIEW_DONE, returncode=0)
+        return ExecResult(output="NO FINDINGS\n", returncode=0)
 
 
 class RunnerTest(unittest.TestCase):
@@ -77,6 +79,53 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(0, len(task_executor.single_prompts))
             self.assertEqual(1, len(review_executor.batch_prompts))
             self.assertEqual(1, len(review_executor.single_prompts))
+
+    def test_single_review_reports_findings_before_synthesis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            executor = FakeExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=False,
+                ),
+                executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+            )
+
+            runner.run()
+
+            self.assertEqual(2, len(executor.single_prompts))
+            self.assertIn("this session may inspect and report only", executor.single_prompts[0])
+            self.assertIn("=== review ===\nNO FINDINGS", executor.single_prompts[1])
+
+    def test_review_agents_can_use_a_separate_read_only_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            task_executor = FakeExecutor()
+            review_agent_executor = FakeExecutor()
+            synthesis_executor = FakeExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=True,
+                ),
+                task_executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+                review_executor=synthesis_executor,  # type: ignore[arg-type]
+                review_agent_executor=review_agent_executor,  # type: ignore[arg-type]
+            )
+
+            runner.run()
+
+            self.assertEqual(1, len(review_agent_executor.batch_prompts))
+            self.assertEqual(0, len(review_agent_executor.single_prompts))
+            self.assertEqual(0, len(synthesis_executor.batch_prompts))
+            self.assertEqual(1, len(synthesis_executor.single_prompts))
 
 
 class FailureDescriptionTest(unittest.TestCase):

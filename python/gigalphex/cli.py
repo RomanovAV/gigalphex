@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wait-on-rate-limit", type=float, help="seconds to wait before retrying a rate-limited session")
     parser.add_argument("--review-workers", type=int, help="maximum parallel review agents")
     parser.add_argument("--default-branch", help="default branch for diffs")
+    parser.add_argument("--base-ref", help="branch or git ref to compare with HEAD in --review mode")
     parser.add_argument("--branch", help="branch to create/switch to before running a plan")
     parser.add_argument("--no-branch", action="store_true", help="do not create/switch branches")
     parser.add_argument("--worktree", action="store_true", help="run the plan in an isolated git worktree")
@@ -59,7 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-move-plan", action="store_true", help="do not move completed plan to completed/")
     parser.add_argument("--no-commit-plan", action="store_true", help="do not commit newly created plans")
     parser.add_argument("--finalize", action="store_true", help="run finalize prompt after review")
-    parser.add_argument("--no-parallel-review", action="store_true", help="use a single review prompt instead of parallel agents")
+    parser.add_argument(
+        "--no-parallel-review",
+        action="store_true",
+        help="use one read-only reviewer before synthesis instead of parallel agents",
+    )
     parser.add_argument("--dry-run", action="store_true", help="print prompts instead of invoking gigacode")
     return parser
 
@@ -88,6 +93,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"warning: could not initialize global gigalphex files: {exc}", file=sys.stderr)
 
     args = build_parser().parse_args(argv)
+    if args.base_ref and not args.review:
+        print("error: --base-ref requires --review", file=sys.stderr)
+        return 2
+    if args.base_ref and args.default_branch:
+        print("error: --base-ref and --default-branch cannot be used together", file=sys.stderr)
+        return 2
     if args.init or args.init_prompts:
         written: list[Path] = []
         if args.init:
@@ -155,6 +166,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.review_workers = args.review_workers
     if args.default_branch:
         cfg.default_branch = args.default_branch
+    if args.base_ref:
+        cfg.default_branch = args.base_ref
     if args.no_branch:
         cfg.create_branch = False
     if args.worktree:
@@ -235,6 +248,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             git.ensure_repo()
             cfg.default_branch = git.default_branch(cfg.default_branch)
+            if args.review:
+                git.ensure_ref_exists(cfg.default_branch)
             ignored_dirty_paths = auto_init_written if auto_init_started_clean else []
             git.ensure_clean(cfg.allow_dirty, ignored_dirty_paths)
             if cfg.worktree and plan_file is not None and not args.review:
@@ -287,6 +302,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_workers=cfg.review_workers,
         output=log.stream,
     )
+    review_agent_executor = GigaCodeExecutor(
+        command=cfg.gigacode_command,
+        args=cfg.args_for_review_agent(),
+        timeout=cfg.session_timeout,
+        idle_timeout=cfg.idle_timeout,
+        retry_count=cfg.retry_count,
+        retry_delay=cfg.retry_delay,
+        retry_patterns=cfg.retry_patterns,
+        rate_limit_patterns=cfg.rate_limit_patterns,
+        wait_on_rate_limit=cfg.wait_on_rate_limit,
+        max_workers=cfg.review_workers,
+        output=log.stream,
+    )
     finalize_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("finalize"),
@@ -303,8 +331,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not args.dry_run:
         log.section("startup")
         log.write(f"gigacode command: {task_executor.command_line()}\n")
+        if review_agent_executor.command_line() != task_executor.command_line():
+            log.write(f"review agent gigacode command: {review_agent_executor.command_line()}\n")
         if review_executor.command_line() != task_executor.command_line():
-            log.write(f"review gigacode command: {review_executor.command_line()}\n")
+            log.write(f"review synthesis gigacode command: {review_executor.command_line()}\n")
         if cfg.finalize_enabled and finalize_executor.command_line() != review_executor.command_line():
             log.write(f"finalize gigacode command: {finalize_executor.command_line()}\n")
         if cfg.session_timeout:
@@ -316,7 +346,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         if cfg.wait_on_rate_limit is not None:
             log.write(f"rate limit wait: {cfg.wait_on_rate_limit}s\n")
         log.write(f"review workers: {cfg.review_workers}\n")
-        log.write(f"default branch: {cfg.default_branch}\n")
+        if args.review:
+            log.write(f"review base ref: {cfg.default_branch}\n")
+        else:
+            log.write(f"default branch: {cfg.default_branch}\n")
         if worktree_path is not None:
             log.write(f"worktree: {worktree_path}\n")
             log.write(f"branch: {args.branch or branch_name_from_plan(plan_file)}\n")
@@ -337,7 +370,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     try:
-        Runner(options, task_executor, log, review_executor=review_executor, finalize_executor=finalize_executor).run()
+        Runner(
+            options,
+            task_executor,
+            log,
+            review_executor=review_executor,
+            review_agent_executor=review_agent_executor,
+            finalize_executor=finalize_executor,
+        ).run()
         if (
             not args.dry_run
             and cfg.move_plan_on_completion

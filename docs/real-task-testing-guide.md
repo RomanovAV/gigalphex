@@ -121,6 +121,15 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli docs/plans/2026061
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review
 ```
 
+Запустить review текущей ветки относительно явно указанной ветки:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review --base-ref develop
+```
+
+Review-агенты работают только на чтение и возвращают замечания. Исправления,
+тесты и коммит `fix: address code review findings` выполняет только synthesis.
+
 Не переключать текущую ветку автоматически:
 
 ```bash

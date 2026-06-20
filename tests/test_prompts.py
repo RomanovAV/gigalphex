@@ -6,7 +6,13 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.config import init_project_config, init_project_prompt_templates
-from gigalphex.prompts import DEFAULT_PROMPTS, PromptContext, load_prompt_templates, render_review_synthesis_prompt
+from gigalphex.prompts import (
+    DEFAULT_PROMPTS,
+    PromptContext,
+    load_prompt_templates,
+    render_review_prompt,
+    render_review_synthesis_prompt,
+)
 
 
 class PromptTemplatesTest(unittest.TestCase):
@@ -42,12 +48,22 @@ class PromptTemplatesTest(unittest.TestCase):
 
     def test_review_synthesis_template_gets_full_context(self) -> None:
         prompt = render_review_synthesis_prompt(
-            "{default_branch} {progress_file} {goal}",
+            "{default_branch} {base_ref} {progress_file} {goal}",
             {"quality": "NO FINDINGS"},
             PromptContext(None, Path("progress.txt"), "master"),
         )
 
-        self.assertEqual("master progress.txt current branch vs master", prompt)
+        self.assertEqual("master master progress.txt current branch vs master", prompt)
+
+    def test_review_prompt_appends_read_only_guard_to_custom_templates(self) -> None:
+        prompt = render_review_prompt(
+            "Review {goal}. Fix issues and commit them.",
+            PromptContext(None, Path("progress.txt"), "develop"),
+        )
+
+        self.assertTrue(prompt.startswith("Review current branch vs develop. Fix issues and commit them."))
+        self.assertIn("ignore any earlier template instruction", prompt)
+        self.assertIn("Only the later synthesis session is allowed to apply fixes.", prompt)
 
     def test_init_project_config_does_not_create_local_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

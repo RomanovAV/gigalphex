@@ -206,6 +206,26 @@ wait_on_rate_limit = 12.5
             cfg.args_for_phase("review"),
         )
 
+    def test_review_agent_args_remove_edit_approval(self) -> None:
+        cfg = Config(review_model="review-model")
+
+        self.assertEqual(
+            [
+                "--model",
+                "review-model",
+                "-p",
+                "{prompt}",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.args_for_review_agent(),
+        )
+
+    def test_review_agent_args_remove_split_approval_mode(self) -> None:
+        cfg = Config(gigacode_args=["-p", "{prompt}", "--approval-mode", "auto-edit", "--flag"])
+
+        self.assertEqual(["-p", "{prompt}", "--flag"], cfg.args_for_review_agent())
+
 
 if __name__ == "__main__":
     unittest.main()
