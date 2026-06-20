@@ -74,6 +74,13 @@ class CliTest(unittest.TestCase):
             finally:
                 os.chdir(original_cwd)
 
+    def test_finalize_cli_defaults_to_config_and_can_be_disabled(self) -> None:
+        parser = build_parser()
+
+        self.assertIsNone(parser.parse_args([]).finalize)
+        self.assertTrue(parser.parse_args(["--finalize"]).finalize)
+        self.assertFalse(parser.parse_args(["--no-finalize"]).finalize)
+
     def test_auto_init_includes_real_plan_creation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

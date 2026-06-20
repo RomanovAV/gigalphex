@@ -8,7 +8,7 @@ This is a small standalone rewrite of the useful ralphex core:
 - run one task section per agent iteration
 - stream output to terminal and progress logs
 - detect gigalphex completion signals
-- run review and optional finalize loops
+- run review and a default finalize pass
 - run five specialist review agents in parallel, then synthesize/fix findings
 - create/switch a git branch from the plan filename
 - optionally run a plan in an isolated git worktree
@@ -145,6 +145,8 @@ Review behavior:
 - reviewers only inspect and report findings; they do not edit or commit
 - synthesis uses `task_model`, verifies reported findings, and is the only
   stage that may fix, test, and commit changes
+- finalize runs after a successful review by default; pass `--no-finalize` to
+  skip the final validation/cleanup pass
 - fallback: pass `--no-parallel-review` to use one read-only reviewer followed
   by the same synthesis stage
 - limit fan-out with `--review-workers N`
@@ -173,6 +175,7 @@ retry_patterns = FYA_TRANSIENT_TIMEOUT,API Error: 529,API Error: 502,API Error: 
 rate_limit_patterns = Rate limit exceeded,rate limit reached,429 Too Many Requests,quota exceeded,insufficient_quota,You've hit your usage limit
 wait_on_rate_limit =
 review_workers = 5
+finalize_enabled = true
 create_branch = true
 worktree = false
 move_plan_on_completion = true

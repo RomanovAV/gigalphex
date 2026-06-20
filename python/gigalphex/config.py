@@ -33,7 +33,7 @@ class Config:
     default_branch: str = ""
     max_iterations: int = 50
     review_iterations: int = 5
-    finalize_enabled: bool = False
+    finalize_enabled: bool = True
     session_timeout: Optional[int] = None
     idle_timeout: Optional[int] = 900
     retry_count: int = 1
@@ -183,7 +183,7 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 # default_branch =
 # max_iterations = 50
 # review_iterations = 5
-# finalize_enabled = false
+# finalize_enabled = true
 # session_timeout = 1800
 # idle_timeout = 900
 # retry_count = 1

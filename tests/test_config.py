@@ -20,6 +20,9 @@ class ConfigTest(unittest.TestCase):
     def test_created_plans_are_committed_by_default(self) -> None:
         self.assertTrue(Config().commit_plan_on_creation)
 
+    def test_finalize_is_enabled_by_default(self) -> None:
+        self.assertTrue(Config().finalize_enabled)
+
     def test_worktree_is_disabled_by_default(self) -> None:
         self.assertFalse(Config().worktree)
 
@@ -58,6 +61,13 @@ wait_on_rate_limit = 12.5
             self.assertEqual(["temporary one", "temporary two"], cfg.retry_patterns)
             self.assertEqual(["limit one", "limit two"], cfg.rate_limit_patterns)
             self.assertEqual(12.5, cfg.wait_on_rate_limit)
+
+    def test_config_can_disable_finalize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config"
+            config.write_text("[gigalphex]\nfinalize_enabled = false\n", encoding="utf-8")
+
+            self.assertFalse(load_config(config).finalize_enabled)
 
     def test_local_config_overrides_global_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,6 +142,7 @@ wait_on_rate_limit = 12.5
             self.assertIn("[gigalphex]", text)
             self.assertIn("# task_model =", text)
             self.assertIn("# review_workers = 5", text)
+            self.assertIn("# finalize_enabled = true", text)
 
     def test_init_global_config_does_not_overwrite_existing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

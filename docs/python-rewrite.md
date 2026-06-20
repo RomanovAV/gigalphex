@@ -16,7 +16,7 @@
 - Detect gigalphex completion signals.
 - Run a review loop after tasks.
 - Run five specialist review agents in parallel, then synthesize/fix findings.
-- Optionally run a finalize prompt.
+- Run a finalize prompt by default, with `--no-finalize` to disable it.
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
 - Select GigaCode models per phase with `plan_model`, `task_model`,
   `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.

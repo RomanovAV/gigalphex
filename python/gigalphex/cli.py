@@ -59,7 +59,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-dirty", action="store_true", help="allow starting with uncommitted changes")
     parser.add_argument("--no-move-plan", action="store_true", help="do not move completed plan to completed/")
     parser.add_argument("--no-commit-plan", action="store_true", help="do not commit newly created plans")
-    parser.add_argument("--finalize", action="store_true", help="run finalize prompt after review")
+    finalize_group = parser.add_mutually_exclusive_group()
+    finalize_group.add_argument(
+        "--finalize",
+        action="store_true",
+        dest="finalize",
+        default=None,
+        help="run finalize prompt after review (enabled by default)",
+    )
+    finalize_group.add_argument(
+        "--no-finalize",
+        action="store_false",
+        dest="finalize",
+        help="skip the finalize prompt after review",
+    )
     parser.add_argument(
         "--no-parallel-review",
         action="store_true",
@@ -178,8 +191,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.move_plan_on_completion = False
     if args.no_commit_plan:
         cfg.commit_plan_on_creation = False
-    if args.finalize:
-        cfg.finalize_enabled = True
+    if args.finalize is not None:
+        cfg.finalize_enabled = args.finalize
 
     if args.plan:
         progress_file = cfg.progress_dir / "progress-plan.txt"

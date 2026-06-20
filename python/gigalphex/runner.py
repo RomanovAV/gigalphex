@@ -30,7 +30,7 @@ class RunOptions:
     review_iterations: int = 5
     tasks_only: bool = False
     review_only: bool = False
-    finalize_enabled: bool = False
+    finalize_enabled: bool = True
     dry_run: bool = False
     parallel_review: bool = True
     delay_seconds: float = 1.0

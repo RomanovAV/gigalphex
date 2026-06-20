@@ -41,6 +41,7 @@ class RunnerTest(unittest.TestCase):
                     progress_file=tmp_path / "progress.txt",
                     review_only=True,
                     parallel_review=True,
+                    finalize_enabled=False,
                 ),
                 executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
@@ -67,6 +68,7 @@ class RunnerTest(unittest.TestCase):
                     progress_file=tmp_path / "progress.txt",
                     review_only=True,
                     parallel_review=True,
+                    finalize_enabled=False,
                 ),
                 task_executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
@@ -90,6 +92,7 @@ class RunnerTest(unittest.TestCase):
                     progress_file=tmp_path / "progress.txt",
                     review_only=True,
                     parallel_review=False,
+                    finalize_enabled=False,
                 ),
                 executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
@@ -113,6 +116,7 @@ class RunnerTest(unittest.TestCase):
                     progress_file=tmp_path / "progress.txt",
                     review_only=True,
                     parallel_review=True,
+                    finalize_enabled=False,
                 ),
                 task_executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
