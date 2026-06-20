@@ -20,8 +20,10 @@
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
 - Select GigaCode models per phase with `plan_model`, `task_model`,
   `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.
-- Initialize local `.gigalphex/` config and editable prompt templates, including
-  automatic initialization on first real plan creation or execution.
+- Initialize the local `.gigalphex/` config automatically on first real plan
+  creation or execution.
+- Initialize editable global prompt templates automatically and create local
+  project prompt overrides only with `--init-prompts`.
 - Bound executor runs with session timeout, idle timeout, retry count, retry
   delay, and review worker limit.
 - Classify transient and rate-limit executor failures with configurable
@@ -96,10 +98,17 @@ gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_
 default_branch =
 ```
 
-Create local config and prompt templates:
+Create local config:
 
 ```bash
 PYTHONPATH=python python3 -m gigalphex.cli --init
+```
+
+Global prompt templates are created automatically under
+`~/.config/gigalphex/prompts/`. Create local project overrides only when needed:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
 ```
 
 Create a new plan:

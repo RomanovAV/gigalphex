@@ -10,7 +10,9 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 - `gigacode` is available at `/Users/19268765/.gigacode/bin/gigacode`.
 - Unit tests passed from the repository root: `19/19`, then `20/20` after the
   prompt-placeholder fix.
-- `--init` created config and all prompt templates.
+- the first CLI launch created the global config and all global prompt templates.
+- `--init` created the local project config without shadowing global prompts.
+- `--init-prompts` created local prompt overrides on demand.
 - `--plan --dry-run` printed the plan-generation prompt and did not invoke
   `gigacode`.
 - Real `--plan` created markdown plans under `docs/plans/`.
@@ -166,25 +168,34 @@ Observed:
 
 The following already passed historically. Re-run only if related code changed.
 
-## 4. Verify `--init` in a Clean Directory
+## 4. Verify Global Initialization and Local `--init`
 
 ```bash
 mkdir -p /tmp/gigalphex-init-check
 cd /tmp/gigalphex-init-check
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init
 find .gigalphex -type f | sort
+find ~/.config/gigalphex -type f | sort
 ```
 
 Expected files:
 
 ```text
 .gigalphex/config
-.gigalphex/prompts/finalize.txt
-.gigalphex/prompts/make_plan.txt
-.gigalphex/prompts/review.txt
-.gigalphex/prompts/review_agent.txt
-.gigalphex/prompts/review_synthesis.txt
-.gigalphex/prompts/task.txt
+~/.config/gigalphex/config
+~/.config/gigalphex/prompts/finalize.txt
+~/.config/gigalphex/prompts/make_plan.txt
+~/.config/gigalphex/prompts/review.txt
+~/.config/gigalphex/prompts/review_agent.txt
+~/.config/gigalphex/prompts/review_synthesis.txt
+~/.config/gigalphex/prompts/task.txt
+```
+
+The local `.gigalphex/prompts/` directory should not exist yet. Create local
+overrides explicitly:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init-prompts
 ```
 
 ## 5. Verify `--plan --dry-run`
@@ -249,7 +260,7 @@ From the repository root:
 
 ```bash
 cd /path/to/gigalphex
-PYTHONPATH=python python3 -m gigalphex.cli --init
+PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
 printf 'CUSTOM PLAN PROMPT: {plan_request}\n' > .gigalphex/prompts/make_plan.txt
 PYTHONPATH=python python3 -m gigalphex.cli --plan "demo request" --dry-run
 ```

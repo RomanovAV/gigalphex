@@ -68,17 +68,24 @@ PYTHONPATH=python python3 -m gigalphex.cli --worktree docs/plans/my-feature.md
 PYTHONPATH=python python3 -m gigalphex.cli --worktree --branch=my-feature docs/plans/tasks.md
 ```
 
-Initialize local project config and editable prompt templates:
+Initialize local project config:
 
 ```bash
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
 If you skip `--init`, the first real plan creation or plan execution initializes
-the local `.gigalphex/config` and prompt templates automatically. Dry runs and
-review-only runs do not auto-create these files.
+the local `.gigalphex/config` automatically. Dry runs and review-only runs do
+not auto-create it. Local prompt templates are not created automatically,
+because their presence overrides the global prompt with the same filename.
 Initialization also creates or updates `.gitignore` with `.DS_Store` and
 `.gigalphex/progress/`, so local progress logs stay out of normal commits.
+
+Create editable project-specific prompt overrides only when needed:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
+```
 
 Initialize git automatically when creating or running a plan in a fresh folder:
 
@@ -156,6 +163,20 @@ commit_plan_on_creation = true
 allow_dirty = false
 ```
 
+Configuration loading priority, from lowest to highest:
+
+1. embedded defaults
+2. global config at `~/.config/gigalphex/config`
+3. project config at `.gigalphex/config`
+4. a file passed with `--config`
+5. supported `GIGALPHEX_*` environment variables
+6. CLI arguments
+
+The global directory `~/.config/gigalphex/`, a commented
+`~/.config/gigalphex/config` template, and all six prompt templates under
+`~/.config/gigalphex/prompts/` are created automatically when the CLI starts.
+Existing global config and prompt files are never overwritten.
+
 Git behavior:
 
 - plan runs create/switch to a branch derived from the plan filename
@@ -170,12 +191,12 @@ Git behavior:
 
 Prompt customization:
 
-- `--init` creates `.gigalphex/prompts/make_plan.txt`
-- `--init` creates `.gigalphex/prompts/task.txt`
-- `--init` creates `.gigalphex/prompts/review.txt`
-- `--init` creates `.gigalphex/prompts/review_agent.txt`
-- `--init` creates `.gigalphex/prompts/review_synthesis.txt`
-- `--init` creates `.gigalphex/prompts/finalize.txt`
+- global editable defaults are created automatically in
+  `~/.config/gigalphex/prompts/`
+- `--init-prompts` creates project-specific overrides in
+  `.gigalphex/prompts/`
+- both directories use `make_plan.txt`, `task.txt`, `review.txt`,
+  `review_agent.txt`, `review_synthesis.txt`, and `finalize.txt`
 - loading priority is local prompts directory, then `~/.config/gigalphex/prompts`, then embedded defaults
 
 Model selection:

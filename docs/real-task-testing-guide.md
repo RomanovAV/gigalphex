@@ -36,6 +36,14 @@ PYTHONPATH=python python3 -m unittest discover -s tests
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
+Глобальные шаблоны промптов автоматически создаются в
+`~/.config/gigalphex/prompts/`. Если для конкретного проекта нужны свои версии,
+создайте локальные переопределения отдельно:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --init-prompts
+```
+
 Если тестируете `gigalphex` на другом проекте без установки пакета, запускайте
 его из корня целевого проекта с абсолютным `PYTHONPATH`:
 

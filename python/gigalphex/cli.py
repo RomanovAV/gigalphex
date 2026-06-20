@@ -6,7 +6,13 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-from .config import init_project_config, load_config
+from .config import (
+    init_global_config,
+    init_global_prompt_templates,
+    init_project_config,
+    init_project_prompt_templates,
+    load_config,
+)
 from .executor import GigaCodeExecutor
 from .git import GitError, GitService, branch_name_from_plan, move_plan_to_completed
 from .planner import clean_plan_output, next_plan_path
@@ -19,7 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gigalphex")
     parser.add_argument("plan_file", nargs="?", help="path to markdown plan file")
     parser.add_argument("--config", type=Path, help="config file path")
-    parser.add_argument("--init", action="store_true", help="create local .gigalphex config and prompt templates")
+    parser.add_argument("--init", action="store_true", help="create local .gigalphex config")
+    parser.add_argument(
+        "--init-prompts",
+        action="store_true",
+        help="create local .gigalphex prompt templates that override global prompts",
+    )
     parser.add_argument("--init-git", action="store_true", help="run git init first when current directory is not a git repository")
     parser.add_argument("--plan", help="create a markdown execution plan for this request")
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
@@ -70,15 +81,25 @@ def completed_plan_commit_message(plan_path: Path) -> str:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    try:
+        init_global_config()
+        init_global_prompt_templates()
+    except OSError as exc:
+        print(f"warning: could not initialize global gigalphex files: {exc}", file=sys.stderr)
+
     args = build_parser().parse_args(argv)
-    if args.init:
-        written = init_project_config()
+    if args.init or args.init_prompts:
+        written: list[Path] = []
+        if args.init:
+            written.extend(init_project_config())
+        if args.init_prompts:
+            written.extend(init_project_prompt_templates())
         if written:
             print("initialized gigalphex files:")
             for path in written:
                 print(f"- {path}")
         else:
-            print("gigalphex config already initialized")
+            print("requested gigalphex files already initialized")
         return 0
 
     auto_init_written: list[Path] = []

@@ -21,6 +21,47 @@ def write_script(path: Path, body: str) -> Path:
 
 
 class CliTest(unittest.TestCase):
+    def test_main_creates_global_config_and_prompt_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            project = tmp_path / "project"
+            project.mkdir()
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(project)
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(io.StringIO()):
+                    code = main(["--init"])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            config = home / ".config/gigalphex/config"
+            self.assertTrue(config.is_file())
+            self.assertIn("# task_model =", config.read_text(encoding="utf-8"))
+            self.assertTrue((home / ".config/gigalphex/prompts/task.txt").is_file())
+            self.assertTrue((home / ".config/gigalphex/prompts/review_synthesis.txt").is_file())
+            self.assertFalse((project / ".gigalphex/prompts").exists())
+
+    def test_init_prompts_creates_local_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            project = tmp_path / "project"
+            project.mkdir()
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(project)
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(io.StringIO()):
+                    code = main(["--init-prompts"])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertTrue((project / ".gigalphex/prompts/task.txt").is_file())
+            self.assertTrue((project / ".gigalphex/prompts/review_synthesis.txt").is_file())
+            self.assertFalse((project / ".gigalphex/config").exists())
+
     def test_auto_init_requires_existing_plan_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -101,8 +142,7 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
 
             self.assertEqual(0, code)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
-            self.assertTrue((tmp_path / ".gigalphex/prompts/task.txt").exists())
-            self.assertTrue((tmp_path / ".gigalphex/prompts/review_synthesis.txt").exists())
+            self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
 
     def test_plan_execution_outside_git_repo_returns_actionable_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -292,7 +332,7 @@ print("- [ ] Do it")
             self.assertIn("docs/plans/", committed)
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
-            self.assertTrue((tmp_path / ".gigalphex/prompts/make_plan.txt").exists())
+            self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
 
     def test_plan_creation_can_initialize_git_repository_before_commit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

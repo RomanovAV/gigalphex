@@ -12,6 +12,13 @@ from .executor import DEFAULT_RATE_LIMIT_PATTERNS, DEFAULT_TRANSIENT_RETRY_PATTE
 from .prompts import init_prompt_templates
 
 
+GLOBAL_CONFIG_RELATIVE_DIR = Path(".config/gigalphex")
+
+
+def global_config_dir() -> Path:
+    return Path.home() / GLOBAL_CONFIG_RELATIVE_DIR
+
+
 @dataclass
 class Config:
     gigacode_command: str = "gigacode"
@@ -65,15 +72,17 @@ class Config:
 
     @property
     def prompt_dirs(self) -> list[Path]:
-        return [self.prompts_dir, Path.home() / ".config/gigalphex/prompts"]
+        return [self.prompts_dir, global_config_dir() / "prompts"]
 
 
 def load_config(path: Optional[Path] = None) -> Config:
     cfg = Config()
-    candidates = []
+    candidates = [
+        global_config_dir() / "config",
+        Path(".gigalphex/config"),
+    ]
     if path is not None:
         candidates.append(path)
-    candidates.extend([Path(".gigalphex/config"), Path.home() / ".config/gigalphex/config"])
 
     parser = ConfigParser()
     parser.optionxform = str
@@ -170,6 +179,20 @@ DEFAULT_CONFIG_TEXT = """[gigalphex]
 """
 
 
+def init_global_config() -> list[Path]:
+    config_dir = global_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_path = config_dir / "config"
+    if config_path.exists():
+        return []
+    config_path.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
+    return [config_path]
+
+
+def init_global_prompt_templates() -> list[Path]:
+    return init_prompt_templates(global_config_dir() / "prompts")
+
+
 DEFAULT_GITIGNORE_LINES = [
     ".DS_Store",
     ".gigalphex/progress/",
@@ -190,8 +213,11 @@ def init_project_config(base_dir: Path = Path(".gigalphex")) -> list[Path]:
     if _ensure_gitignore_lines(gitignore_path, DEFAULT_GITIGNORE_LINES):
         written.append(gitignore_path)
 
-    written.extend(init_prompt_templates(base_dir / "prompts"))
     return written
+
+
+def init_project_prompt_templates(base_dir: Path = Path(".gigalphex")) -> list[Path]:
+    return init_prompt_templates(base_dir / "prompts")
 
 
 def _ensure_gitignore_lines(path: Path, lines: list[str]) -> bool:
