@@ -40,6 +40,39 @@ class PlanParserTest(unittest.TestCase):
             path.write_text("- [ ] literal format [ ] example\n- [x] done\n", encoding="utf-8")
             self.assertFalse(file_has_uncompleted_checkbox(path))
 
+    def test_parses_fully_localized_russian_plan(self) -> None:
+        plan = parse_plan(
+            """# План: Демо
+
+## Обзор
+Добавить новую возможность.
+
+## Контекст
+Сначала изучить существующую реализацию.
+
+### Задача 1: Реализация
+- [x] Готовый шаг
+- [ ] Добавить код
+
+### Итерация №2: Проверка
+- [ ] Запустить тесты
+
+## Проверка
+- выполнить полный набор тестов
+"""
+        )
+
+        self.assertEqual("План: Демо", plan.title)
+        self.assertEqual([1, 2], [task.number for task in plan.tasks])
+        self.assertEqual(["Реализация", "Проверка"], [task.title for task in plan.tasks])
+        self.assertEqual(1, plan.first_uncompleted_task_index())
+
+    def test_russian_task_header_is_case_insensitive(self) -> None:
+        plan = parse_plan("### задача 1: Сделать\n- [ ] Шаг\n")
+
+        self.assertEqual(1, len(plan.tasks))
+        self.assertEqual(1, plan.tasks[0].number)
+
 
 if __name__ == "__main__":
     unittest.main()

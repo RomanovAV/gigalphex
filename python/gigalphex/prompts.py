@@ -28,9 +28,9 @@ class PromptTemplates:
     finalize: str
 
 
-TASK_PROMPT = """Read the plan file at {plan_file}. Find the FIRST Task section (### Task N: or ### Iteration N:) that has uncompleted checkboxes ([ ]).
+TASK_PROMPT = """Read the plan file at {plan_file}. Find the FIRST executable task section that has uncompleted checkboxes ([ ]).
 
-Complete exactly one Task/Iteration section per run:
+Complete exactly one task section per run:
 - read Overview and Context
 - implement all unchecked items in the selected section
 - add or update tests
@@ -41,7 +41,7 @@ Complete exactly one Task/Iteration section per run:
 Only mark a checkbox as [x] after that exact item is complete. If a checkbox asks
 for a commit, leave it unchecked unless `git commit` succeeds.
 
-If no unchecked Task/Iteration checkboxes remain, output exactly:
+If no unchecked task-section checkboxes remain, output exactly:
 <<<GIGALPHEX:ALL_TASKS_DONE>>>
 
 If the task cannot be completed after reasonable fixes, output exactly:
@@ -51,6 +51,11 @@ Progress log: {progress_file}
 Default branch: {default_branch}
 
 Plain text output only. Do not continue to the next task section.
+"""
+
+TASK_FORMAT_GUIDANCE = """Plan format compatibility:
+- Treat `### Task N:`, `### Iteration N:`, `### Задача N:`, and `### Итерация N:` as equivalent executable task headings.
+- Other structural headings may also be localized. In Russian plans, read `Обзор`, `Контекст`, and `Проверка` like `Overview`, `Context`, and `Validation`.
 """
 
 MAKE_PLAN_PROMPT = """Create an implementation plan for this request:
@@ -83,12 +88,18 @@ List important files, modules, constraints, assumptions, and risks the agent sho
 - command or manual check
 
 Rules:
-- Write the plan in the same language as the user's request.
-- Use `### Task N:` sections only for executable work.
+- Write the entire plan in the same language as the user's request. Translate headings too.
+- Use supported task headings only for executable work.
 - Keep tasks independently committable.
 - Prefer 2-6 tasks.
 - Include testing and validation in the task checkboxes.
 - Output only the markdown plan, with no surrounding commentary or code fences.
+"""
+
+PLAN_LOCALIZATION_GUIDANCE = """Plan localization compatibility:
+- English and Russian structural headings are both valid.
+- For a Russian request, the whole template may be translated, for example: `# План:`, `## Обзор`, `## Контекст`, `### Задача N:`, and `## Проверка`.
+- Executable task headings must use one of these forms consistently: `### Task N:`, `### Iteration N:`, `### Задача N:`, or `### Итерация N:`.
 """
 
 REVIEW_PROMPT = """You are the review agent.
@@ -222,6 +233,10 @@ def render(template: str, context: PromptContext) -> str:
     return template.format(**_context_values(context))
 
 
+def render_task_prompt(template: str, context: PromptContext) -> str:
+    return _with_guidance(render(template, context), TASK_FORMAT_GUIDANCE)
+
+
 def _context_values(context: PromptContext) -> dict[str, object]:
     return {
         "plan_file": context.plan_file or "(no plan file)",
@@ -233,7 +248,10 @@ def _context_values(context: PromptContext) -> dict[str, object]:
 
 
 def render_make_plan(template: str, plan_request: str) -> str:
-    return template.format(plan_request=plan_request)
+    return _with_guidance(
+        template.format(plan_request=plan_request),
+        PLAN_LOCALIZATION_GUIDANCE,
+    )
 
 
 REVIEW_AGENTS = {
@@ -291,3 +309,7 @@ def render_review_synthesis_prompt(
 
 def _with_read_only_review_guard(prompt: str) -> str:
     return f"{prompt.rstrip()}\n\n{READ_ONLY_REVIEW_GUARD}"
+
+
+def _with_guidance(prompt: str, guidance: str) -> str:
+    return f"{prompt.rstrip()}\n\n{guidance.rstrip()}\n"

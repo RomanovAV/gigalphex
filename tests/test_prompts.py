@@ -10,14 +10,33 @@ from gigalphex.prompts import (
     DEFAULT_PROMPTS,
     PromptContext,
     load_prompt_templates,
+    render_make_plan,
     render_review_prompt,
     render_review_synthesis_prompt,
+    render_task_prompt,
 )
 
 
 class PromptTemplatesTest(unittest.TestCase):
     def test_make_plan_prompt_preserves_request_language(self) -> None:
-        self.assertIn("Write the plan in the same language as the user's request.", DEFAULT_PROMPTS.make_plan)
+        self.assertIn("Write the entire plan in the same language as the user's request.", DEFAULT_PROMPTS.make_plan)
+
+    def test_make_plan_render_allows_fully_localized_russian_template(self) -> None:
+        prompt = render_make_plan("Создай план для запроса:\n{plan_request}", "добавить поиск")
+
+        self.assertIn("добавить поиск", prompt)
+        self.assertIn("`### Задача N:`", prompt)
+        self.assertIn("`## Обзор`", prompt)
+
+    def test_task_render_supports_russian_headings_for_custom_templates(self) -> None:
+        prompt = render_task_prompt(
+            "Выполни план {plan_file}.",
+            PromptContext(Path("docs/plans/demo.md"), Path("progress.txt"), "main"),
+        )
+
+        self.assertIn("Выполни план docs/plans/demo.md.", prompt)
+        self.assertIn("`### Задача N:`", prompt)
+        self.assertIn("`Контекст`", prompt)
 
     def test_loads_local_prompt_over_embedded_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,7 +110,7 @@ class PromptTemplatesTest(unittest.TestCase):
             self.assertEqual("keep me", existing.read_text(encoding="utf-8"))
             self.assertTrue((prompt_dir / "make_plan.txt").exists())
             self.assertIn(
-                "Write the plan in the same language as the user's request.",
+                "Write the entire plan in the same language as the user's request.",
                 (prompt_dir / "make_plan.txt").read_text(encoding="utf-8"),
             )
             self.assertTrue((prompt_dir / "review.txt").exists())

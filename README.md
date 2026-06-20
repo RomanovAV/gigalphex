@@ -4,7 +4,8 @@ Python autonomous plan runner for GigaCode CLI.
 
 This is a small standalone rewrite of the useful ralphex core:
 
-- parse markdown plans with `### Task N:` / `### Iteration N:`
+- parse English and Russian markdown plans with `### Task N:` /
+  `### Iteration N:` / `### Задача N:` / `### Итерация N:`
 - run one task section per agent iteration
 - stream output to terminal and progress logs
 - detect gigalphex completion signals
@@ -110,7 +111,10 @@ Create a new executable plan:
 PYTHONPATH=python python3 -m gigalphex.cli --plan "add user authentication"
 ```
 
-Generated plans are requested in the same language as the `--plan` text.
+Generated plans are requested entirely in the same language as the `--plan`
+text, including structural headings. Russian plans may use `# План`,
+`## Обзор`, `## Контекст`, `### Задача N:`, and `## Проверка`; they are parsed
+and executed exactly like their English equivalents.
 By default, a newly created plan is committed as `docs: add plan <name>` when
 the current directory is inside a git repository. Use `--no-commit-plan` or
 `commit_plan_on_creation = false` to leave the plan uncommitted.

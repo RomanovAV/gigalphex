@@ -6,7 +6,10 @@ import re
 from typing import Optional
 
 
-TASK_HEADER_RE = re.compile(r"^###\s+(?:Task|Iteration)\s+([^:]+?):\s*(.*)$")
+TASK_HEADER_RE = re.compile(
+    r"^###\s+(?:Task|Iteration|Задача|Итерация)\s+(?:№\s*)?([^:]+?):\s*(.*)$",
+    re.IGNORECASE,
+)
 CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]\s*(.*)$")
 TITLE_RE = re.compile(r"^#\s+(.*)$")
 FORMAT_IN_TEXT_RE = re.compile(r"\[\s*[ xX]?\s*\]")

@@ -17,6 +17,7 @@ from .prompts import (
     render_review_agent_prompt,
     render_review_prompt,
     render_review_synthesis_prompt,
+    render_task_prompt,
 )
 from .signals import ALL_TASKS_DONE, REVIEW_DONE, TASK_FAILED
 
@@ -73,7 +74,7 @@ class Runner:
             raise ValueError("plan file is required for task execution")
         self._validate_plan_has_tasks()
         context = self._context()
-        prompt = render(self.options.prompts.task, context)
+        prompt = render_task_prompt(self.options.prompts.task, context)
 
         for iteration in range(1, self.options.max_iterations + 1):
             task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index() or iteration
@@ -163,7 +164,7 @@ class Runner:
         context = self._context()
         if not self.options.review_only:
             self.log.section("task prompt")
-            self.log.stream(render(self.options.prompts.task, context))
+            self.log.stream(render_task_prompt(self.options.prompts.task, context))
             self.log.stream("\n")
         if not self.options.tasks_only:
             self.log.section("review prompt")
