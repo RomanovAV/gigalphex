@@ -43,15 +43,15 @@ class Runner:
         options: RunOptions,
         executor: GigaCodeExecutor,
         log: ProgressLog,
-        review_executor: Optional[GigaCodeExecutor] = None,
+        synthesis_executor: Optional[GigaCodeExecutor] = None,
         review_agent_executor: Optional[GigaCodeExecutor] = None,
         finalize_executor: Optional[GigaCodeExecutor] = None,
     ) -> None:
         self.options = options
         self.executor = executor
-        self.review_executor = review_executor or executor
-        self.review_agent_executor = review_agent_executor or self.review_executor
-        self.finalize_executor = finalize_executor or self.review_executor
+        self.synthesis_executor = synthesis_executor or executor
+        self.review_agent_executor = review_agent_executor or self.synthesis_executor
+        self.finalize_executor = finalize_executor or self.synthesis_executor
         self.log = log
 
     def run(self) -> None:
@@ -106,7 +106,7 @@ class Runner:
                 raise RuntimeError("review failed")
 
             self.log.section("review synthesis")
-            synthesis = self.review_executor.run(
+            synthesis = self.synthesis_executor.run(
                 render_review_synthesis_prompt(
                     self.options.prompts.review_synthesis,
                     {"review": result.output},
@@ -141,7 +141,7 @@ class Runner:
                     raise RuntimeError(describe_failure(f"gigacode review agent {name}", result))
 
             self.log.section("review synthesis")
-            synthesis = self.review_executor.run(
+            synthesis = self.synthesis_executor.run(
                 render_review_synthesis_prompt(self.options.prompts.review_synthesis, findings, context)
             )
             if not synthesis.ok:

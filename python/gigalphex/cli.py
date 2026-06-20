@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
     parser.add_argument("--plan-model", help="GigaCode model for plan creation; falls back to task model")
     parser.add_argument("--task-model", help="GigaCode model for task execution")
-    parser.add_argument("--review-model", help="GigaCode model for review agents and synthesis; falls back to task model")
+    parser.add_argument("--review-model", help="GigaCode model for read-only review agents; falls back to task model")
     parser.add_argument("--finalize-model", help="GigaCode model for finalize; falls back to review/task model")
     parser.add_argument("--tasks-only", action="store_true", help="run task phase only")
     parser.add_argument("--review", action="store_true", help="skip tasks and run review phase")
@@ -289,9 +289,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_workers=cfg.review_workers,
         output=log.stream,
     )
-    review_executor = GigaCodeExecutor(
+    synthesis_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
-        args=cfg.args_for_phase("review"),
+        args=cfg.args_for_phase("synthesis"),
         timeout=cfg.session_timeout,
         idle_timeout=cfg.idle_timeout,
         retry_count=cfg.retry_count,
@@ -333,9 +333,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         log.write(f"gigacode command: {task_executor.command_line()}\n")
         if review_agent_executor.command_line() != task_executor.command_line():
             log.write(f"review agent gigacode command: {review_agent_executor.command_line()}\n")
-        if review_executor.command_line() != task_executor.command_line():
-            log.write(f"review synthesis gigacode command: {review_executor.command_line()}\n")
-        if cfg.finalize_enabled and finalize_executor.command_line() != review_executor.command_line():
+        if synthesis_executor.command_line() != task_executor.command_line():
+            log.write(f"review synthesis gigacode command: {synthesis_executor.command_line()}\n")
+        if cfg.finalize_enabled and finalize_executor.command_line() != synthesis_executor.command_line():
             log.write(f"finalize gigacode command: {finalize_executor.command_line()}\n")
         if cfg.session_timeout:
             log.write(f"session timeout: {cfg.session_timeout}s\n")
@@ -374,7 +374,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             options,
             task_executor,
             log,
-            review_executor=review_executor,
+            synthesis_executor=synthesis_executor,
             review_agent_executor=review_agent_executor,
             finalize_executor=finalize_executor,
         ).run()

@@ -20,6 +20,8 @@
 - Configure the agent command as `gigacode` plus arbitrary CLI args.
 - Select GigaCode models per phase with `plan_model`, `task_model`,
   `review_model`, and `finalize_model`, mapped to GigaCode's `--model` flag.
+  Read-only reviewers use `review_model`; review synthesis and fixes use
+  `task_model`.
 - Initialize the local `.gigalphex/` config automatically on first real plan
   creation or execution.
 - Initialize editable global prompt templates automatically and create local

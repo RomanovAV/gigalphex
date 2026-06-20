@@ -129,6 +129,8 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review --base-re
 
 Review-агенты работают только на чтение и возвращают замечания. Исправления,
 тесты и коммит `fix: address code review findings` выполняет только synthesis.
+Review-агенты используют `review_model`, а synthesis — `task_model`, как и
+основная реализация.
 
 Не переключать текущую ветку автоматически:
 

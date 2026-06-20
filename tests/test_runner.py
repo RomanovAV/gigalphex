@@ -56,11 +56,11 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(1, len(executor.single_prompts))
             self.assertIn("specialist review agents", executor.single_prompts[0])
 
-    def test_review_uses_review_executor(self) -> None:
+    def test_review_uses_synthesis_executor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             task_executor = FakeExecutor()
-            review_executor = FakeExecutor()
+            synthesis_executor = FakeExecutor()
             runner = Runner(
                 RunOptions(
                     plan_file=None,
@@ -70,15 +70,15 @@ class RunnerTest(unittest.TestCase):
                 ),
                 task_executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
-                review_executor=review_executor,  # type: ignore[arg-type]
+                synthesis_executor=synthesis_executor,  # type: ignore[arg-type]
             )
 
             runner.run()
 
             self.assertEqual(0, len(task_executor.batch_prompts))
             self.assertEqual(0, len(task_executor.single_prompts))
-            self.assertEqual(1, len(review_executor.batch_prompts))
-            self.assertEqual(1, len(review_executor.single_prompts))
+            self.assertEqual(1, len(synthesis_executor.batch_prompts))
+            self.assertEqual(1, len(synthesis_executor.single_prompts))
 
     def test_single_review_reports_findings_before_synthesis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -116,7 +116,7 @@ class RunnerTest(unittest.TestCase):
                 ),
                 task_executor,  # type: ignore[arg-type]
                 ProgressLog(tmp_path / "progress.txt"),
-                review_executor=synthesis_executor,  # type: ignore[arg-type]
+                synthesis_executor=synthesis_executor,  # type: ignore[arg-type]
                 review_agent_executor=review_agent_executor,  # type: ignore[arg-type]
             )
 

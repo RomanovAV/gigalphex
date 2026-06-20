@@ -69,6 +69,8 @@ class Config:
             return self.task_model
         if phase == "review":
             return self.review_model or self.task_model
+        if phase == "synthesis":
+            return self.task_model
         if phase == "finalize":
             return self.finalize_model or self.review_model or self.task_model
         raise ValueError(f"unknown phase: {phase}")

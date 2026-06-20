@@ -206,6 +206,22 @@ wait_on_rate_limit = 12.5
             cfg.args_for_phase("review"),
         )
 
+    def test_synthesis_uses_task_model_instead_of_review_model(self) -> None:
+        cfg = Config(task_model="code-model", review_model="review-model")
+
+        self.assertEqual(
+            [
+                "--model",
+                "code-model",
+                "-p",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.args_for_phase("synthesis"),
+        )
+
     def test_review_agent_args_remove_edit_approval(self) -> None:
         cfg = Config(review_model="review-model")
 

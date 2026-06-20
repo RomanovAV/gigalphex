@@ -32,10 +32,10 @@ allows edit/write tools, while shell commands such as tests and `git commit`
 also require `--allowed-tools run_shell_command`. Output is streamed from
 combined stdout/stderr back to the terminal and progress log.
 
-Specialist and single-review sessions remove the configured `--approval-mode`
-argument and receive an explicit inspect-only prompt. The synthesis session
-keeps the normal editable invocation and is the only review stage allowed to
-fix files or create commits.
+Specialist and single-review sessions use `review_model`, remove the configured
+`--approval-mode` argument, and receive an explicit inspect-only prompt. The
+synthesis session uses `task_model`, keeps the normal editable invocation, and
+is the only review stage allowed to fix files or create commits.
 
 Observed GigaCode constraints:
 
@@ -143,8 +143,8 @@ Review behavior:
 - pass `--base-ref REF` to compare `REF...HEAD`; without it, the default branch
   is auto-detected
 - reviewers only inspect and report findings; they do not edit or commit
-- synthesis verifies reported findings and is the only stage that may fix,
-  test, and commit changes
+- synthesis uses `task_model`, verifies reported findings, and is the only
+  stage that may fix, test, and commit changes
 - fallback: pass `--no-parallel-review` to use one read-only reviewer followed
   by the same synthesis stage
 - limit fan-out with `--review-workers N`
@@ -222,7 +222,9 @@ Model selection:
 
 - GigaCode exposes model selection as `-m/--model`, separate from `-p/--prompt`.
 - `plan_model`, `task_model`, `review_model`, and `finalize_model` add
-  `--model <name>` to the GigaCode invocation for that phase.
-- `plan_model` falls back to `task_model`, `review_model` falls back to
-  `task_model`, and `finalize_model` falls back to `review_model`/`task_model`.
+  `--model <name>` to the GigaCode invocation for their phases.
+- review agents use `review_model`, falling back to `task_model`.
+- synthesis/fixes always use `task_model`, the same model as task execution.
+- `plan_model` falls back to `task_model`, and `finalize_model` falls back to
+  `review_model`/`task_model`.
 # gigalphex
