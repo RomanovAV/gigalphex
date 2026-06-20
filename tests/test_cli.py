@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.cli import (
+    add_gigacode_args,
     build_parser,
     find_interactively_created_plan,
     main,
@@ -27,6 +28,37 @@ def write_script(path: Path, body: str) -> Path:
 
 
 class CliTest(unittest.TestCase):
+    def test_extra_gigacode_args_are_inserted_before_positional_prompt(self) -> None:
+        self.assertEqual(
+            [
+                "--approval-mode=auto-edit",
+                "--allowed-tools=run_shell_command",
+                "--include-directories=/workspace/shared",
+                "{prompt}",
+            ],
+            add_gigacode_args(
+                [
+                    "--approval-mode=auto-edit",
+                    "--allowed-tools=run_shell_command",
+                    "{prompt}",
+                ],
+                ["--include-directories=/workspace/shared"],
+            ),
+        )
+
+    def test_extra_gigacode_args_do_not_split_legacy_prompt_flag_and_value(self) -> None:
+        self.assertEqual(
+            [
+                "--include-directories=/workspace/shared",
+                "-p",
+                "{prompt}",
+            ],
+            add_gigacode_args(
+                ["-p", "{prompt}"],
+                ["--include-directories=/workspace/shared"],
+            ),
+        )
+
     def test_main_creates_global_config_and_prompt_templates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -413,6 +445,7 @@ target.write_text("# Plan: Demo\\n\\n### Task 1: Build\\n- [ ] Do it\\n")
                             "add demo feature",
                             "--gigacode-command",
                             str(fake_gigacode),
+                            "--gigacode-arg=--include-directories=/workspace/shared",
                         ]
                     )
             finally:
@@ -422,6 +455,9 @@ target.write_text("# Plan: Demo\\n\\n### Task 1: Build\\n- [ ] Do it\\n")
             prompt = capture.read_text(encoding="utf-8")
             self.assertEqual(0, code)
             self.assertEqual(1, len(plans))
+            self.assertIn("--prompt-interactive", prompt)
+            self.assertIn("--approval-mode=auto-edit", prompt)
+            self.assertIn("--include-directories=/workspace/shared", prompt)
             self.assertIn("installed `planning` skill", prompt)
             self.assertIn("add demo feature", prompt)
             self.assertIn(str(plans[0].relative_to(tmp_path)), prompt)

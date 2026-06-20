@@ -57,10 +57,7 @@ class ExecResult:
 
     @property
     def approval_unavailable(self) -> bool:
-        return (
-            'Tool "run_shell_command" requires user approval but cannot execute in non-interactive mode'
-            in self.output
-        )
+        return "requires user approval but cannot execute in non-interactive mode" in self.output
 
 
 class GigaCodeExecutor:
@@ -96,7 +93,10 @@ class GigaCodeExecutor:
         return self._run_with_retries(prompt, self.output)
 
     def run_interactive(self, prompt: str) -> ExecResult:
-        argv, stdin_prompt = self._build_invocation(prompt)
+        argv, stdin_prompt = self._build_invocation(
+            prompt,
+            require_placeholder=True,
+        )
         if stdin_prompt:
             raise ValueError(
                 "interactive GigaCode args must include {prompt}; "
@@ -129,6 +129,8 @@ class GigaCodeExecutor:
 
     def command_line(self) -> str:
         safe_args = [arg.replace("{prompt}", "<prompt>") for arg in self.args]
+        if not any("{prompt}" in arg for arg in self.args):
+            safe_args.append("<prompt>")
         return shlex.join([self.command, *safe_args])
 
     def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
@@ -249,7 +251,12 @@ class GigaCodeExecutor:
             rate_limited=failed and matches_any(text, self.rate_limit_patterns),
         )
 
-    def _build_invocation(self, prompt: str) -> tuple[list[str], str]:
+    def _build_invocation(
+        self,
+        prompt: str,
+        *,
+        require_placeholder: bool = False,
+    ) -> tuple[list[str], str]:
         used_placeholder = False
         args: list[str] = []
         for arg in self.args:
@@ -258,7 +265,11 @@ class GigaCodeExecutor:
                 used_placeholder = True
             else:
                 args.append(arg)
-        return [self.command, *args], "" if used_placeholder else prompt
+        if not used_placeholder:
+            if require_placeholder:
+                return [self.command, *args], prompt
+            args.append(prompt)
+        return [self.command, *args], ""
 
 
 def matches_any(text: str, patterns: list[str]) -> bool:

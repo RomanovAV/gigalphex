@@ -43,18 +43,18 @@
 
 The Python version is intentionally small first. It launches `gigacode` in
 one-shot mode with
-`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command` by
-default and substitutes the generated prompt into `{prompt}` before invoking
-GigaCode. GigaCode 26.5.17 needs `--allowed-tools run_shell_command` for tests
-and git commands; `--approval-mode=auto-edit` only covers edit/write tools. If
-custom args omit `{prompt}`, the executor falls back to sending the generated
-prompt on stdin. If the CLI later needs a subcommand or different flags, the
-executor boundary is `GigaCodeExecutor`, so adapting the invocation should be
-one local change.
+`--approval-mode=auto-edit --allowed-tools=run_shell_command {prompt}` by
+default and substitutes the generated prompt into the positional `query`
+argument. GigaCode 26.5.17 needs `--allowed-tools=run_shell_command` for tests
+and git commands; `--approval-mode=auto-edit` only covers edit/write tools.
+The older `-p/--prompt` form is deprecated by GigaCode. If custom args omit
+`{prompt}`, the executor appends the generated prompt as the positional query.
+If the CLI later needs a subcommand or different flags, the executor boundary
+is `GigaCodeExecutor`, so adapting the invocation should be one local change.
 
 GigaCode model selection is a CLI concern, not a prompt concern. The CLI exposes
 `-m/--model`, so gigalphex adds `--model <name>` to the phase invocation instead
-of embedding model names in the `-p` prompt text.
+of embedding model names in the prompt text.
 
 ## Observed GigaCode behavior
 
@@ -70,12 +70,14 @@ of embedding model names in the `-p` prompt text.
 - Approval mode must be explicit in non-interactive runs. Real logs show
   `Warning: Tool "run_shell_command" requires user approval but cannot execute
   in non-interactive mode`; GigaCode help shows that shell execution additionally
-  requires `--allowed-tools run_shell_command`.
+  requires `--allowed-tools=run_shell_command`.
 - GigaCode appears to run on Node.js; `MaxListenersExceededWarning` can surface
   in its output.
-- There are no observed CLI subcommands, JSON/REST API, official Python SDK, or
-  `IN_PROGRESS` signal. `gigalphex` therefore treats the CLI process and output
-  stream as the integration boundary.
+- GigaCode has administrative CLI subcommands (`mcp`, `extensions`, `auth`,
+  `sandbox`, and `hooks`) but no task-execution subcommand. There is also no
+  observed JSON/REST API, official Python SDK, or `IN_PROGRESS` signal.
+  `gigalphex` therefore uses the default `gigacode [query..]` command and
+  treats the CLI process and output stream as the integration boundary.
 
 ## Usage
 
@@ -96,8 +98,8 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
-gigacode_interactive_args = {prompt}
+gigacode_args = --approval-mode=auto-edit --allowed-tools=run_shell_command {prompt}
+gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 gigacode_skills_dir = ~/.gigacode/skills
 default_branch =
 ```

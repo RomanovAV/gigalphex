@@ -21,19 +21,22 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 - Custom `.gigalphex/prompts/make_plan.txt` overrode the embedded prompt.
 - The previous newline fix worked: `created plan:` and `progress log:` no
   longer stick to the last line of GigaCode output.
-- Small task execution passed end-to-end on 2026-06-12 with the default
+- Small task execution passed end-to-end on 2026-06-12 with the then-current
   `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`
   invocation. GigaCode created `SMOKE_TEST.md`, marked the task checkboxes,
-  committed the changes, and emitted the completion signal.
+  committed the changes, and emitted the completion signal. The current
+  default uses the positional `query` because GigaCode now marks `-p` as
+  deprecated.
 
 The formerly unresolved item was small task execution. When the prompt was sent
 through stdin, GigaCode warned that `run_shell_command` needed approval and the
 task failed before commit. Passing the prompt through `-p {prompt}` fixed the
 invocation shape but did not allow shell commands by itself. GigaCode help for
 26.5.17 says `--approval-mode=auto-edit` allows edit/write tools, while shell
-commands require `--allowed-tools run_shell_command`. The current default uses
-that full invocation and the 2026-06-12 smoke run confirmed autonomous commits
-without a manual follow-up.
+commands require `--allowed-tools=run_shell_command`. The current default uses
+the equivalent positional-query invocation with
+`--allowed-tools=run_shell_command`; the 2026-06-12 smoke run confirmed
+autonomous commits without a manual follow-up.
 
 ## Current Retest Scope
 
@@ -125,7 +128,7 @@ Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
 - The startup section logs
-  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`,
+  `gigacode --approval-mode=auto-edit --allowed-tools=run_shell_command '<prompt>'`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
@@ -154,7 +157,7 @@ PYTHONPATH=/Users/19268765/IdeaProjects/gigalphex-new/python:$PYTHONPATH python3
 
 Observed:
 - No non-interactive shell approval warning.
-- Startup logged: gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
+- Startup logged (historical run): gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
 - Created SMOKE_TEST.md with a non-empty sentence.
 - Marked all three Task 1 checkboxes as [x].
 - Created commits:
@@ -255,6 +258,7 @@ PYTHONPATH=python python3 -m gigalphex.cli --plan "add health check endpoint"
 Expected:
 
 - GigaCode opens interactively instead of returning one one-shot response.
+- GigaLphex passes the planning request through `--prompt-interactive`.
 - The `planning` skill inspects the repository and asks focused questions.
 - Creates a file like `docs/plans/YYYYMMDD-add-health-check-endpoint.md`.
 - The file contains a markdown plan.
@@ -264,13 +268,12 @@ Expected:
 - After exiting GigaCode, GigaLphEx reports the created path and commits it
   when plan commits are enabled.
 
-If GigaCode does not accept a positional initial prompt, inspect
-`gigacode --help` and configure the equivalent syntax while preserving the
-placeholder:
+If this GigaCode version needs extra flags to launch its TUI, inspect
+`gigacode --help` and configure them:
 
 ```ini
 [gigalphex]
-gigacode_interactive_args = <interactive flags> {prompt}
+gigacode_interactive_args = <interactive flags> {prompt} --approval-mode=auto-edit
 ```
 
 Notes:
@@ -335,10 +338,10 @@ Notes:
 
 ## Things to Watch Closely
 
-- Does `gigacode` accept the generated prompt through `-p {prompt}`?
-- Does interactive GigaCode accept `{prompt}` as a positional initial prompt?
+- Does `gigacode` accept the generated prompt as the positional `query`?
+- Does GigaLphex pass the request through `--prompt-interactive` and keep the TUI open?
 - Does the installed `planning` skill create the exact requested plan path?
-- Does `--approval-mode=auto-edit --allowed-tools run_shell_command` avoid
+- Does `--approval-mode=auto-edit --allowed-tools=run_shell_command` avoid
   non-interactive approval failures?
 - Does any run hang without output?
 - Does generated markdown contain extra commentary or code fences?

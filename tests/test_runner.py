@@ -318,7 +318,7 @@ class FailureDescriptionTest(unittest.TestCase):
 
         self.assertEqual(
             "gigacode task session exited with status 1 "
-            "(GigaCode requested shell approval in non-interactive mode)",
+            "(GigaCode requested tool approval in non-interactive mode)",
             message,
         )
 

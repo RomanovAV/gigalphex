@@ -14,12 +14,23 @@ from gigalphex.prompts import DEFAULT_PROMPTS
 class ConfigTest(unittest.TestCase):
     def test_default_args_enable_noninteractive_auto_edit(self) -> None:
         self.assertEqual(
-            ["-p", "{prompt}", "--approval-mode=auto-edit", "--allowed-tools", "run_shell_command"],
+            [
+                "--approval-mode=auto-edit",
+                "--allowed-tools=run_shell_command",
+                "{prompt}",
+            ],
             Config().resolved_args,
         )
 
-    def test_default_interactive_args_pass_initial_prompt_positionally(self) -> None:
-        self.assertEqual(["{prompt}"], Config().resolved_interactive_args)
+    def test_default_interactive_args_pass_initial_prompt_and_allow_plan_writes(self) -> None:
+        self.assertEqual(
+            [
+                "--prompt-interactive",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+            ],
+            Config().resolved_interactive_args,
+        )
 
     def test_default_gigacode_skills_dir_uses_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -76,12 +87,12 @@ wait_on_rate_limit = 12.5
         with tempfile.TemporaryDirectory() as tmp:
             config = Path(tmp) / "config"
             config.write_text(
-                "[gigalphex]\ngigacode_interactive_args = --chat {prompt}\n",
+                "[gigalphex]\ngigacode_interactive_args = -i {prompt}\n",
                 encoding="utf-8",
             )
 
             self.assertEqual(
-                ["--chat", "{prompt}"],
+                ["-i", "{prompt}"],
                 load_config(config).resolved_interactive_args,
             )
 
@@ -280,7 +291,11 @@ Plain text output only.
         first.append("--include-directories")
 
         self.assertEqual(
-            ["-p", "{prompt}", "--approval-mode=auto-edit", "--allowed-tools", "run_shell_command"],
+            [
+                "--approval-mode=auto-edit",
+                "--allowed-tools=run_shell_command",
+                "{prompt}",
+            ],
             Config().resolved_args,
         )
 
@@ -291,11 +306,9 @@ Plain text output only.
             [
                 "--model",
                 "strong-review",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools",
-                "run_shell_command",
+                "--allowed-tools=run_shell_command",
+                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -304,7 +317,13 @@ Plain text output only.
         cfg = Config(plan_model="planning-model")
 
         self.assertEqual(
-            ["--model", "planning-model", "{prompt}"],
+            [
+                "--model",
+                "planning-model",
+                "--prompt-interactive",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+            ],
             cfg.args_for_interactive_plan(),
         )
 
@@ -315,11 +334,9 @@ Plain text output only.
             [
                 "--model",
                 "shared-model",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools",
-                "run_shell_command",
+                "--allowed-tools=run_shell_command",
+                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -331,11 +348,9 @@ Plain text output only.
             [
                 "--model",
                 "code-model",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools",
-                "run_shell_command",
+                "--allowed-tools=run_shell_command",
+                "{prompt}",
             ],
             cfg.args_for_phase("synthesis"),
         )
@@ -347,18 +362,23 @@ Plain text output only.
             [
                 "--model",
                 "review-model",
-                "-p",
+                "--allowed-tools=run_shell_command",
                 "{prompt}",
-                "--allowed-tools",
-                "run_shell_command",
             ],
             cfg.args_for_review_agent(),
         )
 
     def test_review_agent_args_remove_split_approval_mode(self) -> None:
-        cfg = Config(gigacode_args=["-p", "{prompt}", "--approval-mode", "auto-edit", "--flag"])
+        cfg = Config(
+            gigacode_args=[
+                "--approval-mode",
+                "auto-edit",
+                "--debug",
+                "{prompt}",
+            ]
+        )
 
-        self.assertEqual(["-p", "{prompt}", "--flag"], cfg.args_for_review_agent())
+        self.assertEqual(["--debug", "{prompt}"], cfg.args_for_review_agent())
 
 
 if __name__ == "__main__":

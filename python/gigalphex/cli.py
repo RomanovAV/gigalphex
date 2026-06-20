@@ -55,7 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="create a plan non-interactively with the one-shot plan prompt",
     )
     parser.add_argument("--gigacode-command", help="command to run, default: gigacode")
-    parser.add_argument("--gigacode-arg", action="append", default=[], help="extra arg for gigacode; repeatable")
+    parser.add_argument(
+        "--gigacode-arg",
+        action="append",
+        default=[],
+        help="extra arg for all gigacode invocations; repeatable",
+    )
     parser.add_argument("--plan-model", help="GigaCode model for plan creation; falls back to task model")
     parser.add_argument("--task-model", help="GigaCode model for task execution")
     parser.add_argument("--review-model", help="GigaCode model for read-only review agents; falls back to task model")
@@ -117,6 +122,25 @@ def plan_commit_message(plan_path: Path) -> str:
 
 def completed_plan_commit_message(plan_path: Path) -> str:
     return f"docs: complete plan {plan_path.stem}"
+
+
+def add_gigacode_args(base_args: list[str], extra_args: list[str]) -> list[str]:
+    for index, arg in enumerate(base_args):
+        if "{prompt}" in arg:
+            insertion_index = index
+            if (
+                arg == "{prompt}"
+                and index > 0
+                and base_args[index - 1]
+                in {"-p", "--prompt", "-i", "--prompt-interactive"}
+            ):
+                insertion_index = index - 1
+            return [
+                *base_args[:insertion_index],
+                *extra_args,
+                *base_args[insertion_index:],
+            ]
+    return [*base_args, *extra_args]
 
 
 def should_use_interactive_plan(args: argparse.Namespace) -> bool:
@@ -222,7 +246,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.skill_dir:
         cfg.gigacode_skills_dir = args.skill_dir.expanduser()
     if args.gigacode_arg:
-        cfg.gigacode_args = [*cfg.resolved_args, *args.gigacode_arg]
+        cfg.gigacode_args = add_gigacode_args(
+            cfg.resolved_args,
+            args.gigacode_arg,
+        )
+        cfg.gigacode_interactive_args = add_gigacode_args(
+            cfg.resolved_interactive_args,
+            args.gigacode_arg,
+        )
     if args.plan_model:
         cfg.plan_model = args.plan_model
     if args.task_model:
