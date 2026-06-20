@@ -81,12 +81,32 @@ class GitService:
         return bool(self.dirty_paths())
 
     def dirty_paths(self) -> list[Path]:
-        proc = self.run("status", "--porcelain", "--untracked-files=all", check=True)
+        proc = self.run(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            check=True,
+        )
         paths: list[Path] = []
-        for line in proc.stdout.splitlines():
-            if len(line) < 4:
+        records = proc.stdout.split("\0")
+        index = 0
+        while index < len(records):
+            record = records[index]
+            if not record:
+                index += 1
                 continue
-            paths.append(Path(line[3:]))
+            if len(record) < 4 or record[2] != " ":
+                index += 1
+                continue
+
+            status = record[:2]
+            paths.append(Path(record[3:]))
+            if "R" in status or "C" in status:
+                index += 1
+                if index < len(records) and records[index]:
+                    paths.append(Path(records[index]))
+            index += 1
         return paths
 
     def has_commits(self) -> bool:

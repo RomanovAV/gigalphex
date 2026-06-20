@@ -2,6 +2,8 @@
 name = "gigalphex"
 version = "0.1.0"
 description = "Python autonomous plan runner for GigaCode CLI"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = []
 
