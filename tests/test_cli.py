@@ -563,6 +563,8 @@ with Path({str(capture)!r}).open("a") as fh:
     fh.write(prompt)
 if "specialist review agents have returned" in prompt:
     print("<<<GIGALPHEX:REVIEW_DONE>>>")
+elif "Phase: final verification" in prompt:
+    print("<<<GIGALPHEX:FINALIZE_DONE>>>")
 else:
     print("NO FINDINGS")
 """,
@@ -607,6 +609,8 @@ with Path({str(capture)!r}).open("a") as fh:
     fh.write(prompt)
 if "specialist review agents have returned" in prompt:
     print("<<<GIGALPHEX:REVIEW_DONE>>>")
+elif "Phase: final verification" in prompt:
+    print("<<<GIGALPHEX:FINALIZE_DONE>>>")
 else:
     print("NO FINDINGS")
 """,
@@ -653,6 +657,8 @@ import sys
 prompt = " ".join(sys.argv[1:]) + sys.stdin.read()
 if "specialist review agents" in prompt:
     print("<<<GIGALPHEX:REVIEW_DONE>>>")
+elif "Phase: final verification" in prompt:
+    print("<<<GIGALPHEX:FINALIZE_DONE>>>")
 elif "You are the" in prompt:
     print("NO FINDINGS")
 else:

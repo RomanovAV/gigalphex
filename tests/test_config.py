@@ -8,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.config import Config, init_global_config, init_global_prompt_templates, load_config
+from gigalphex.prompts import DEFAULT_PROMPTS
 
 
 class ConfigTest(unittest.TestCase):
@@ -210,6 +211,69 @@ wait_on_rate_limit = 12.5
             self.assertTrue((prompt_dir / "plan_skill.txt").is_file())
             self.assertTrue((prompt_dir / "review_agent.txt").is_file())
             self.assertNotIn(existing, written)
+
+    def test_init_global_prompts_updates_an_unchanged_previous_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            prompt_dir = home / ".config/gigalphex/prompts"
+            prompt_dir.mkdir(parents=True)
+            finalize = prompt_dir / "finalize.txt"
+            finalize.write_text(
+                """Finalize the branch for {goal}.
+
+Check git status, run the validation commands from the plan if available, and leave the branch in a clean state.
+Do not rewrite history unless the plan explicitly asks for it.
+
+Progress log: {progress_file}
+Plain text output only.
+""",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                written = init_global_prompt_templates()
+
+            self.assertEqual(DEFAULT_PROMPTS.finalize, finalize.read_text(encoding="utf-8"))
+            self.assertIn(finalize, written)
+            self.assertTrue((prompt_dir / ".defaults.json").is_file())
+
+    def test_init_global_prompts_updates_legacy_review_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            prompt_dir = home / ".config/gigalphex/prompts"
+            prompt_dir.mkdir(parents=True)
+            review = prompt_dir / "review.txt"
+            review.write_text(
+                """You are the review agent.
+
+Review {goal}.
+
+Run:
+- git log {base_ref}..HEAD --oneline
+- git diff {base_ref}...HEAD --stat
+- git diff {base_ref}...HEAD
+
+Read changed files in full context.
+Report confirmed issues only: bugs, broken requirements, missing tests, regressions, security problems, and unnecessary complexity.
+Do not modify files, run mutating commands, or make commits.
+
+Output format:
+- file:line - severity - issue - why it matters - suggested fix
+
+If there are no findings, output exactly:
+NO FINDINGS
+
+Progress log: {progress_file}
+Plain text output only.
+""",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                written = init_global_prompt_templates()
+
+            self.assertEqual(DEFAULT_PROMPTS.review, review.read_text(encoding="utf-8"))
+            self.assertIn(review, written)
 
     def test_resolved_default_args_are_copied(self) -> None:
         first = Config().resolved_args

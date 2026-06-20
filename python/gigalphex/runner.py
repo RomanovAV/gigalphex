@@ -6,6 +6,7 @@ import time
 from typing import Optional
 
 from .executor import ExecResult, GigaCodeExecutor
+from .git import GitService
 from .plan import file_has_uncompleted_checkbox, parse_plan_file
 from .progress import ProgressLog
 from .prompts import (
@@ -19,7 +20,14 @@ from .prompts import (
     render_review_synthesis_prompt,
     render_task_prompt,
 )
-from .signals import ALL_TASKS_DONE, REVIEW_DONE, TASK_FAILED
+from .review import ReviewOutputError
+from .signals import (
+    ALL_TASKS_DONE,
+    FINALIZE_DONE,
+    FINALIZE_FAILED,
+    REVIEW_DONE,
+    TASK_FAILED,
+)
 
 
 @dataclass
@@ -77,13 +85,17 @@ class Runner:
         prompt = render_task_prompt(self.options.prompts.task, context)
 
         for iteration in range(1, self.options.max_iterations + 1):
-            task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index() or iteration
-            self.log.section(f"task iteration {task_index}")
+            task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index()
+            head_before = self._git().head_commit() if task_index is not None else ""
+            dirty_before = self._uncommitted_paths()
+            self.log.section(f"task iteration {task_index or iteration}")
             result = self.executor.run(prompt)
             if not result.ok:
                 raise RuntimeError(describe_failure("gigacode task session", result))
             if result.signal == TASK_FAILED:
                 raise RuntimeError("task failed")
+            if task_index is not None:
+                self._validate_completed_task_iteration(task_index, head_before, dirty_before)
             if result.signal == ALL_TASKS_DONE and not self._has_uncompleted_work():
                 return
             if not self._has_uncompleted_work():
@@ -108,11 +120,7 @@ class Runner:
 
             self.log.section("review synthesis")
             synthesis = self.synthesis_executor.run(
-                render_review_synthesis_prompt(
-                    self.options.prompts.review_synthesis,
-                    {"review": result.output},
-                    context,
-                )
+                self._render_review_synthesis_prompt({"review": result.output}, context)
             )
             if not synthesis.ok:
                 raise RuntimeError(describe_failure("gigacode review synthesis", synthesis))
@@ -143,7 +151,7 @@ class Runner:
 
             self.log.section("review synthesis")
             synthesis = self.synthesis_executor.run(
-                render_review_synthesis_prompt(self.options.prompts.review_synthesis, findings, context)
+                self._render_review_synthesis_prompt(findings, context)
             )
             if not synthesis.ok:
                 raise RuntimeError(describe_failure("gigacode review synthesis", synthesis))
@@ -156,9 +164,16 @@ class Runner:
 
     def run_finalize(self) -> None:
         self.log.section("finalize")
+        dirty_before = self._uncommitted_paths()
         result = self.finalize_executor.run(render(self.options.prompts.finalize, self._context()))
         if not result.ok:
             raise RuntimeError(describe_failure("gigacode finalize session", result))
+        if result.signal == FINALIZE_FAILED:
+            raise RuntimeError("finalize failed")
+        if result.signal != FINALIZE_DONE:
+            raise RuntimeError("finalize did not report successful verification")
+        if self._uncommitted_paths() - dirty_before:
+            raise RuntimeError("finalize left new uncommitted changes in the working tree")
 
     def print_prompts(self) -> None:
         context = self._context()
@@ -202,6 +217,50 @@ class Runner:
         if plan.tasks:
             return plan.has_uncompleted_tasks()
         return file_has_uncompleted_checkbox(self.options.plan_file)
+
+    def _validate_completed_task_iteration(
+        self,
+        task_index: int,
+        head_before: str,
+        dirty_before: set[Path],
+    ) -> None:
+        assert self.options.plan_file is not None
+        plan = parse_plan_file(self.options.plan_file)
+        if task_index > len(plan.tasks) or not plan.tasks[task_index - 1].complete:
+            raise RuntimeError(f"task iteration {task_index} did not complete its selected plan section")
+
+        git = self._git()
+        if git.head_commit() == head_before:
+            raise RuntimeError(f"task iteration {task_index} completed without creating a commit")
+        if self._uncommitted_paths() - dirty_before:
+            raise RuntimeError(f"task iteration {task_index} left new uncommitted changes in the working tree")
+
+    def _git(self) -> GitService:
+        return GitService(Path("."))
+
+    def _uncommitted_paths(self) -> set[Path]:
+        git = self._git()
+        repo_root = git.repo_root()
+        progress_file = self.options.progress_file.resolve()
+        return {
+            (repo_root / path).resolve()
+            for path in git.dirty_paths()
+            if (repo_root / path).resolve() != progress_file
+        }
+
+    def _render_review_synthesis_prompt(
+        self,
+        findings: dict[str, str],
+        context: PromptContext,
+    ) -> str:
+        try:
+            return render_review_synthesis_prompt(
+                self.options.prompts.review_synthesis,
+                findings,
+                context,
+            )
+        except ReviewOutputError as exc:
+            raise RuntimeError(f"invalid structured review output: {exc}") from exc
 
 
 def describe_failure(label: str, result: ExecResult) -> str:

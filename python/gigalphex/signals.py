@@ -1,13 +1,20 @@
 ALL_TASKS_DONE = "<<<GIGALPHEX:ALL_TASKS_DONE>>>"
 TASK_FAILED = "<<<GIGALPHEX:TASK_FAILED>>>"
 REVIEW_DONE = "<<<GIGALPHEX:REVIEW_DONE>>>"
+FINALIZE_DONE = "<<<GIGALPHEX:FINALIZE_DONE>>>"
+FINALIZE_FAILED = "<<<GIGALPHEX:FINALIZE_FAILED>>>"
 
 
 def detect_signal(text: str) -> str:
-    if ALL_TASKS_DONE in text:
-        return ALL_TASKS_DONE
-    if TASK_FAILED in text:
-        return TASK_FAILED
-    if REVIEW_DONE in text:
-        return REVIEW_DONE
-    return ""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    last_line = lines[-1]
+    known_signals = {
+        ALL_TASKS_DONE,
+        TASK_FAILED,
+        REVIEW_DONE,
+        FINALIZE_DONE,
+        FINALIZE_FAILED,
+    }
+    return last_line if last_line in known_signals else ""

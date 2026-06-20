@@ -9,7 +9,7 @@ from typing import Optional
 
 from .defaults import DEFAULT_GIGACODE_ARGS, DEFAULT_GIGACODE_INTERACTIVE_ARGS
 from .executor import DEFAULT_RATE_LIMIT_PATTERNS, DEFAULT_TRANSIENT_RETRY_PATTERNS
-from .prompts import init_prompt_templates
+from .prompts import init_prompt_templates, sync_global_prompt_templates
 
 
 GLOBAL_CONFIG_RELATIVE_DIR = Path(".config/gigalphex")
@@ -237,7 +237,7 @@ def init_global_config() -> list[Path]:
 
 
 def init_global_prompt_templates() -> list[Path]:
-    return init_prompt_templates(global_config_dir() / "prompts")
+    return sync_global_prompt_templates(global_config_dir() / "prompts")
 
 
 DEFAULT_GITIGNORE_LINES = [

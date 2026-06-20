@@ -93,6 +93,10 @@ class GitService:
         proc = self.run("rev-parse", "--verify", "HEAD", check=False)
         return proc.returncode == 0
 
+    def head_commit(self) -> str:
+        proc = self.run("rev-parse", "--verify", "HEAD", check=False)
+        return proc.stdout.strip() if proc.returncode == 0 else ""
+
     def ensure_clean(self, allow_dirty: bool, ignored_paths: Iterable[Path] = ()) -> None:
         if allow_dirty:
             return

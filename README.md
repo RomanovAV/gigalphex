@@ -174,6 +174,11 @@ Review behavior:
 
 - default: parallel review with `quality`, `implementation`, `testing`,
   `simplification`, and `documentation` agents
+- reviewers return machine-validated `<FINDING>` blocks with severity,
+  category, file, evidence, impact, and a minimal suggested fix
+- malformed review output is rejected instead of being forwarded to synthesis
+- synthesis receives normalized findings inside an explicit untrusted-data
+  boundary and independently verifies every claim against the repository
 - pass `--base-ref REF` to compare `REF...HEAD`; without it, the default branch
   is auto-detected
 - reviewers only inspect and report findings; they do not edit or commit
@@ -231,7 +236,9 @@ Configuration loading priority, from lowest to highest:
 The global directory `~/.config/gigalphex/`, a commented
 `~/.config/gigalphex/config` template, and all seven prompt templates under
 `~/.config/gigalphex/prompts/` are created automatically when the CLI starts.
-Existing global config and prompt files are never overwritten.
+Existing global config files and customized prompts are never overwritten.
+Global prompts that still match an earlier installed default are upgraded to
+the current embedded default automatically.
 
 Git behavior:
 
