@@ -93,10 +93,10 @@ PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
 ```
 
 Diagnose differences between direct GigaCode and GigaLphex execution by running
-this script from the affected project directory:
+this Python module from the affected project directory:
 
 ```bash
-/path/to/gigalphex/scripts/diagnose-gigacode.sh
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.diagnose
 ```
 
 For colleagues testing `gigalphex` on real tasks, see the short Russian guide:
