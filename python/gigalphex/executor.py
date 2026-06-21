@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+from pathlib import Path
 import subprocess
 import shlex
 import sys
@@ -80,6 +82,8 @@ class GigaCodeExecutor:
         wait_on_rate_limit: Optional[float] = None,
         max_workers: int = 5,
         output: Optional[Callable[[str], None]] = None,
+        diagnostic: Optional[Callable[[str], None]] = None,
+        name: str = "gigacode",
     ) -> None:
         self.command = command
         self.args = args if args is not None else DEFAULT_GIGACODE_ARGS.copy()
@@ -94,11 +98,15 @@ class GigaCodeExecutor:
         self.wait_on_rate_limit = wait_on_rate_limit
         self.max_workers = max(1, max_workers)
         self.output = output or (lambda line: print(line, end=""))
+        self.diagnostic = diagnostic or (lambda _line: None)
+        self.name = name
 
     def run(self, prompt: str) -> ExecResult:
-        return self._run_with_retries(prompt, self.output)
+        return self._run_with_retries(prompt, self.output, self.name)
 
     def run_interactive(self, prompt: str) -> ExecResult:
+        session = self.name
+        started = time.monotonic()
         argv, stdin_prompt = self._build_invocation(
             prompt,
             require_placeholder=True,
@@ -108,15 +116,42 @@ class GigaCodeExecutor:
                 "interactive GigaCode args must include {prompt}; "
                 "configure gigacode_interactive_args"
             )
+        self._event(
+            session,
+            "prepared",
+            mode="interactive",
+            command=self._safe_command(argv, prompt),
+            prompt_chars=len(prompt),
+            prompt_transport="argv",
+            cwd=Path.cwd(),
+            stdin_tty=sys.stdin.isatty(),
+            stdout_tty=sys.stdout.isatty(),
+        )
         try:
+            self._event(session, "launching")
             proc = subprocess.run(
                 argv,
                 timeout=self.timeout if self.timeout and self.timeout > 0 else None,
             )
         except FileNotFoundError as exc:
+            self._event(session, "launch_failed", error="command_not_found")
             raise RuntimeError(f"gigacode command not found: {self.command}") from exc
         except subprocess.TimeoutExpired:
+            self._event(
+                session,
+                "finished",
+                returncode=-1,
+                duration_ms=_elapsed_ms(started),
+                timed_out=True,
+            )
             return ExecResult(output="", returncode=-1, timed_out=True)
+        self._event(
+            session,
+            "finished",
+            returncode=proc.returncode,
+            duration_ms=_elapsed_ms(started),
+            timed_out=False,
+        )
         return ExecResult(output="", returncode=proc.returncode)
 
     def run_batch(self, prompts: dict[str, str]) -> dict[str, ExecResult]:
@@ -125,7 +160,12 @@ class GigaCodeExecutor:
         results: dict[str, ExecResult] = {}
         with ThreadPoolExecutor(max_workers=min(self.max_workers, len(prompts))) as pool:
             futures = {
-                pool.submit(self._run_with_retries, prompt, lambda _line: None): name
+                pool.submit(
+                    self._run_with_retries,
+                    prompt,
+                    lambda _line: None,
+                    f"{self.name}:{name}",
+                ): name
                 for name, prompt in prompts.items()
             }
             for future in as_completed(futures):
@@ -139,41 +179,93 @@ class GigaCodeExecutor:
             safe_args.extend(["-p", "<prompt>"])
         return shlex.join([self.command, *safe_args])
 
-    def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
+    def _run_with_retries(
+        self,
+        prompt: str,
+        output: Callable[[str], None],
+        session: str,
+    ) -> ExecResult:
         attempts = self.retry_count + 1
         last: Optional[ExecResult] = None
         for attempt in range(1, attempts + 1):
+            self._event(session, "attempt_started", attempt=attempt, attempts=attempts)
             if attempt > 1:
                 output(f"retrying gigacode command, attempt {attempt}/{attempts}\n")
-            result = self._run_once(prompt, output)
+            result = self._run_once(prompt, output, session)
             result.attempts = attempt
             if result.ok:
+                self._event(session, "attempt_succeeded", attempt=attempt)
                 return result
             if result.approval_unavailable:
+                self._event(
+                    session,
+                    "retry_stopped",
+                    attempt=attempt,
+                    reason="approval_unavailable",
+                )
                 return result
             last = result
             if attempt < attempts:
                 delay = self._retry_delay(result)
+                self._event(
+                    session,
+                    "retry_scheduled",
+                    next_attempt=attempt + 1,
+                    delay_seconds=delay,
+                    reason=_failure_reason(result),
+                )
                 if result.rate_limited and delay > 0:
                     output(f"rate limit detected; waiting {delay:g}s before retry\n")
                 elif result.transient_error and delay > 0:
                     output(f"transient error detected; waiting {delay:g}s before retry\n")
                 time.sleep(delay)
         assert last is not None
+        self._event(
+            session,
+            "attempts_exhausted",
+            attempts=attempts,
+            reason=_failure_reason(last),
+        )
         return last
 
-    def _run_once(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
-        return self._run(prompt, output)
+    def _run_once(
+        self,
+        prompt: str,
+        output: Callable[[str], None],
+        session: str,
+    ) -> ExecResult:
+        return self._run(prompt, output, session)
 
     def _retry_delay(self, result: ExecResult) -> float:
         if result.rate_limited and self.wait_on_rate_limit is not None:
             return max(0.0, self.wait_on_rate_limit)
         return self.retry_delay
 
-    def _run(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
+    def _run(
+        self,
+        prompt: str,
+        output: Callable[[str], None],
+        session: str,
+    ) -> ExecResult:
+        started = time.monotonic()
         argv, stdin_prompt = self._build_invocation(prompt)
         pipe_stdin = bool(stdin_prompt)
+        self._event(
+            session,
+            "prepared",
+            mode="noninteractive",
+            command=self._safe_command(argv, prompt),
+            prompt_chars=len(prompt),
+            prompt_transport="stdin" if pipe_stdin else "argv",
+            cwd=Path.cwd(),
+            stdin_tty=sys.stdin.isatty(),
+            stdout_tty=sys.stdout.isatty(),
+            stdout_capture=True,
+            timeout_seconds=self.timeout or 0,
+            idle_timeout_seconds=self.idle_timeout or 0,
+        )
         try:
+            self._event(session, "launching")
             proc = subprocess.Popen(
                 argv,
                 stdin=subprocess.PIPE if pipe_stdin else None,
@@ -184,31 +276,36 @@ class GigaCodeExecutor:
                 errors="replace",
             )
         except FileNotFoundError as exc:
+            self._event(session, "launch_failed", error="command_not_found")
             raise RuntimeError(f"gigacode command not found: {self.command}") from exc
 
+        self._event(session, "started", pid=getattr(proc, "pid", "unknown"))
         assert proc.stdout is not None
         if pipe_stdin:
             assert proc.stdin is not None
             proc.stdin.write(stdin_prompt)
             proc.stdin.close()
+            self._event(session, "stdin_sent", chars=len(stdin_prompt))
 
         chunks: list[str] = []
         timed_out = False
         idle_timed_out = False
+        first_output_seen = False
 
-        def kill_process() -> None:
+        def kill_process(reason: str) -> None:
             if proc.poll() is None:
+                self._event(session, "terminating", reason=reason)
                 proc.kill()
 
         def kill_on_timeout() -> None:
             nonlocal timed_out
             timed_out = True
-            kill_process()
+            kill_process("session_timeout")
 
         def kill_on_idle_timeout() -> None:
             nonlocal idle_timed_out
             idle_timed_out = True
-            kill_process()
+            kill_process("idle_timeout")
 
         timer: Optional[threading.Timer] = None
         idle_timer: Optional[threading.Timer] = None
@@ -231,12 +328,21 @@ class GigaCodeExecutor:
         try:
             for line in proc.stdout:
                 reset_idle_timer()
+                if not first_output_seen:
+                    first_output_seen = True
+                    self._event(
+                        session,
+                        "first_output",
+                        elapsed_ms=_elapsed_ms(started),
+                    )
                 chunks.append(line)
                 output(line)
                 if APPROVAL_UNAVAILABLE_TEXT in line:
-                    kill_process()
+                    self._event(session, "approval_warning_detected")
+                    kill_process("approval_unavailable")
             returncode = proc.wait()
         except KeyboardInterrupt:
+            self._event(session, "interrupted")
             proc.kill()
             proc.wait()
             raise
@@ -253,7 +359,7 @@ class GigaCodeExecutor:
 
         text = "".join(chunks)
         failed = returncode != 0 or timed_out or idle_timed_out
-        return ExecResult(
+        result = ExecResult(
             output=text,
             signal=detect_signal(text),
             returncode=returncode,
@@ -262,6 +368,20 @@ class GigaCodeExecutor:
             transient_error=failed and matches_any(text, self.retry_patterns),
             rate_limited=failed and matches_any(text, self.rate_limit_patterns),
         )
+        self._event(
+            session,
+            "finished",
+            returncode=returncode,
+            duration_ms=_elapsed_ms(started),
+            output_chars=len(text),
+            signal=result.signal or "none",
+            timed_out=timed_out,
+            idle_timed_out=idle_timed_out,
+            transient_error=result.transient_error,
+            rate_limited=result.rate_limited,
+            approval_unavailable=result.approval_unavailable,
+        )
+        return result
 
     def _build_invocation(
         self,
@@ -283,10 +403,50 @@ class GigaCodeExecutor:
             args.extend(["-p", prompt])
         return [self.command, *args], ""
 
+    def _safe_command(self, argv: list[str], prompt: str) -> str:
+        safe_args = [
+            arg.replace(prompt, "<prompt>") if prompt and prompt in arg else arg
+            for arg in argv
+        ]
+        return shlex.join(safe_args)
+
+    def _event(self, session: str, event: str, **fields: object) -> None:
+        details = " ".join(
+            f"{key}={_diagnostic_value(value)}"
+            for key, value in fields.items()
+        )
+        suffix = f" {details}" if details else ""
+        self.diagnostic(f"session={session} event={event}{suffix}")
+
 
 def matches_any(text: str, patterns: list[str]) -> bool:
     lowered = text.lower()
     return any(pattern and pattern.lower() in lowered for pattern in patterns)
+
+
+def _elapsed_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
+
+
+def _failure_reason(result: ExecResult) -> str:
+    if result.approval_unavailable:
+        return "approval_unavailable"
+    if result.timed_out:
+        return "session_timeout"
+    if result.idle_timed_out:
+        return "idle_timeout"
+    if result.rate_limited:
+        return "rate_limited"
+    if result.transient_error:
+        return "transient_error"
+    return f"exit_{result.returncode}"
+
+
+def _diagnostic_value(value: object) -> str:
+    text = str(value)
+    if text and all(char.isalnum() or char in "._:/-+" for char in text):
+        return text
+    return json.dumps(text, ensure_ascii=False)
 
 
 class DryRunExecutor:

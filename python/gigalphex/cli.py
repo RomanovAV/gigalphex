@@ -340,6 +340,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             wait_on_rate_limit=cfg.wait_on_rate_limit,
             max_workers=cfg.review_workers,
             output=log.stream,
+            diagnostic=log.diagnostic,
+            name="plan",
         )
         prompt = (
             render_plan_skill(prompts.plan_skill, args.plan, plan_path)
@@ -449,6 +451,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
+        diagnostic=log.diagnostic,
+        name="task",
     )
     synthesis_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -462,6 +466,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
+        diagnostic=log.diagnostic,
+        name="review-synthesis",
     )
     review_agent_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -475,6 +481,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
+        diagnostic=log.diagnostic,
+        name="review-agent",
     )
     finalize_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -488,6 +496,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
         output=log.stream,
+        diagnostic=log.diagnostic,
+        name="finalize",
     )
     if not args.dry_run:
         log.section("startup")

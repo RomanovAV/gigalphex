@@ -77,6 +77,59 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(1, argv.count(prompt))
         self.assertIsNone(popen.call_args.kwargs["stdin"])
 
+    def test_diagnostics_record_stages_without_prompt_contents(self) -> None:
+        prompt = "SECRET PROMPT\nwith multiple lines"
+        diagnostics: list[str] = []
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.pid = 12345
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter(["ok\n"])
+            process.wait.return_value = 0
+            process.poll.return_value = 0
+
+            result = GigaCodeExecutor(
+                command="gigacode",
+                output=lambda _line: None,
+                diagnostic=diagnostics.append,
+                name="task",
+            ).run(prompt)
+
+        self.assertTrue(result.ok)
+        joined = "\n".join(diagnostics)
+        self.assertIn("session=task event=attempt_started", joined)
+        self.assertIn("session=task event=prepared", joined)
+        self.assertIn("prompt_transport=argv", joined)
+        self.assertIn(f"prompt_chars={len(prompt)}", joined)
+        self.assertIn("session=task event=started pid=12345", joined)
+        self.assertIn("session=task event=first_output", joined)
+        self.assertIn("session=task event=finished", joined)
+        self.assertIn("session=task event=attempt_succeeded", joined)
+        self.assertNotIn(prompt, joined)
+        self.assertNotIn("SECRET PROMPT", joined)
+
+    def test_batch_diagnostics_identify_each_session(self) -> None:
+        diagnostics: list[str] = []
+        executor = GigaCodeExecutor(
+            diagnostic=diagnostics.append,
+            name="review-agent",
+            max_workers=2,
+        )
+        success = ExecResult(output="NO FINDINGS\n", returncode=0)
+
+        with patch.object(executor, "_run_once", return_value=success):
+            results = executor.run_batch(
+                {
+                    "quality": "quality prompt",
+                    "testing": "testing prompt",
+                }
+            )
+
+        self.assertEqual({"quality", "testing"}, set(results))
+        joined = "\n".join(diagnostics)
+        self.assertIn("session=review-agent:quality event=attempt_started", joined)
+        self.assertIn("session=review-agent:testing event=attempt_started", joined)
+
     def test_custom_args_without_prompt_placeholder_append_prompt_option(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_file = Path(tmp) / "capture.json"
@@ -230,6 +283,38 @@ sys.stdout.write("no newline")
         process.kill.assert_called_once_with()
         self.assertTrue(result.approval_unavailable)
         self.assertFalse(result.ok)
+
+    def test_diagnostics_record_approval_stop_reason(self) -> None:
+        diagnostics: list[str] = []
+        warning = (
+            'Warning: Tool "run_shell_command" requires user approval '
+            "but cannot execute in non-interactive mode.\n"
+        )
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.pid = 77
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter([warning])
+            process.poll.return_value = None
+            process.wait.return_value = -9
+
+            result = GigaCodeExecutor(
+                command="gigacode",
+                output=lambda _line: None,
+                diagnostic=diagnostics.append,
+                name="task",
+                retry_count=2,
+            ).run("prompt")
+
+        self.assertFalse(result.ok)
+        joined = "\n".join(diagnostics)
+        self.assertIn("event=approval_warning_detected", joined)
+        self.assertIn("event=terminating reason=approval_unavailable", joined)
+        self.assertIn(
+            "event=retry_stopped attempt=1 reason=approval_unavailable",
+            joined,
+        )
+        self.assertNotIn("event=retry_scheduled", joined)
 
     def test_retries_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

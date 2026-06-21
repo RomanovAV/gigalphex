@@ -88,6 +88,11 @@ Observed GigaCode constraints:
   still detects the warning if it appears.
 - There is no `IN_PROGRESS` signal. Progress is inferred from process lifetime,
   terminal output, and the progress log.
+- Progress logs include executor lifecycle events for every phase: sanitized
+  command, prompt transport and size, process start/PID, first output, timeout
+  or approval detection, exit status, and retry decisions. Prompt contents are
+  never included in these diagnostic lines. Parallel reviewers are identified
+  as `review-agent:<name>`.
 - GigaCode runs on Node.js, so Node warnings such as
   `MaxListenersExceededWarning` may appear in combined output.
 

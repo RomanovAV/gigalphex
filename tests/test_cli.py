@@ -222,6 +222,14 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             self.assertEqual(0, code)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
             self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
+            progress = (
+                tmp_path / ".gigalphex/progress/progress-20260612-smoke.txt"
+            ).read_text(encoding="utf-8")
+            self.assertIn("session=task event=prepared", progress)
+            self.assertIn("session=task event=started", progress)
+            self.assertIn("session=task event=first_output", progress)
+            self.assertIn("session=task event=finished", progress)
+            self.assertIn("prompt_transport=argv", progress)
 
     def test_plan_execution_outside_git_repo_returns_actionable_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
