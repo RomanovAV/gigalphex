@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -45,7 +46,9 @@ class ExecutorTest(unittest.TestCase):
             ],
             popen.call_args.args[0],
         )
-        self.assertIsNone(popen.call_args.kwargs["stdin"])
+        self.assertEqual(subprocess.PIPE, popen.call_args.kwargs["stdin"])
+        process.stdin.write.assert_called_once_with("")
+        process.stdin.close.assert_called_once_with()
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
@@ -56,7 +59,7 @@ class ExecutorTest(unittest.TestCase):
             executor.command_line(),
         )
 
-    def test_custom_args_without_prompt_placeholder_append_prompt_option(self) -> None:
+    def test_custom_args_without_prompt_placeholder_use_stdin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_file = Path(tmp) / "capture.json"
             script = write_script(
@@ -65,7 +68,7 @@ class ExecutorTest(unittest.TestCase):
 from pathlib import Path
 import json
 import sys
-Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:]}}))
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
 print("ok")
 """,
             )
@@ -78,12 +81,13 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["--debug", "-p", "prompt body"], captured["argv"])
+            self.assertEqual(["--debug"], captured["argv"])
+            self.assertEqual("prompt body", captured["stdin"])
 
-    def test_command_line_shows_appended_prompt_option(self) -> None:
+    def test_command_line_does_not_invent_prompt_option_for_custom_args(self) -> None:
         executor = GigaCodeExecutor(command="gigacode", args=["--debug"])
 
-        self.assertEqual("gigacode --debug -p '<prompt>'", executor.command_line())
+        self.assertEqual("gigacode --debug", executor.command_line())
 
     def test_legacy_prompt_flag_can_embed_prompt_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

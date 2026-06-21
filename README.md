@@ -27,8 +27,9 @@ gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_s
 The default argument template is
 `-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
-GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
-`-p <generated prompt>`. GigaCode marks `-p/--prompt` as deprecated in favor of
+GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex sends
+the generated prompt through stdin, preserving the verified legacy behavior.
+GigaCode marks `-p/--prompt` as deprecated in favor of
 the positional query, but its variadic `query..` parser consumes options placed
 after the query, while array-valued options can consume a query placed after
 them. The explicit `-p` form is therefore the reliable non-interactive contract
@@ -58,10 +59,11 @@ customized content is preserved; use `--force-skill-install` to replace it
 with the bundled version. For a GigaCode version using another skills
 directory, pass `--skill-dir PATH` or configure `gigacode_skills_dir`.
 
-Specialist and single-review sessions use `review_model`, remove the configured
-`--approval-mode` argument, and receive an explicit inspect-only prompt. The
-synthesis session uses `task_model`, keeps the normal editable invocation, and
-is the only review stage allowed to fix files or create commits.
+Specialist and single-review sessions use `review_model`, keep the configured
+shell approval arguments, and receive an explicit inspect-only prompt. Keeping
+the normal invocation lets reviewers run inspection commands without an
+interactive approval failure. The synthesis session uses `task_model` and is
+the only review stage instructed to fix files or create commits.
 
 Observed GigaCode constraints:
 

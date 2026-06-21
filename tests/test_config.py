@@ -365,7 +365,7 @@ Plain text output only.
             cfg.args_for_phase("synthesis"),
         )
 
-    def test_review_agent_args_remove_edit_approval(self) -> None:
+    def test_review_agent_args_keep_shell_approval_flags(self) -> None:
         cfg = Config(review_model="review-model")
 
         self.assertEqual(
@@ -374,13 +374,14 @@ Plain text output only.
                 "review-model",
                 "-p",
                 "{prompt}",
+                "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
             ],
             cfg.args_for_review_agent(),
         )
 
-    def test_review_agent_args_remove_split_approval_mode(self) -> None:
+    def test_review_agent_args_preserve_custom_split_approval_mode(self) -> None:
         cfg = Config(
             gigacode_args=[
                 "--approval-mode",
@@ -390,7 +391,10 @@ Plain text output only.
             ]
         )
 
-        self.assertEqual(["--debug", "{prompt}"], cfg.args_for_review_agent())
+        self.assertEqual(
+            ["--approval-mode", "auto-edit", "--debug", "{prompt}"],
+            cfg.args_for_review_agent(),
+        )
 
 
 if __name__ == "__main__":
