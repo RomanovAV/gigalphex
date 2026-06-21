@@ -164,10 +164,11 @@ class GigaCodeExecutor:
 
     def _run(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         argv, stdin_prompt = self._build_invocation(prompt)
+        pipe_stdin = bool(stdin_prompt)
         try:
             proc = subprocess.Popen(
                 argv,
-                stdin=subprocess.PIPE,
+                stdin=subprocess.PIPE if pipe_stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -177,10 +178,11 @@ class GigaCodeExecutor:
         except FileNotFoundError as exc:
             raise RuntimeError(f"gigacode command not found: {self.command}") from exc
 
-        assert proc.stdin is not None
         assert proc.stdout is not None
-        proc.stdin.write(stdin_prompt)
-        proc.stdin.close()
+        if pipe_stdin:
+            assert proc.stdin is not None
+            proc.stdin.write(stdin_prompt)
+            proc.stdin.close()
 
         chunks: list[str] = []
         timed_out = False

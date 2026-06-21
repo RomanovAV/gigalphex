@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
@@ -19,34 +20,32 @@ def write_script(path: Path, body: str) -> Path:
 
 class ExecutorTest(unittest.TestCase):
     def test_default_gigacode_args_use_explicit_prompt_option(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            output_file = Path(tmp) / "capture.json"
-            script = write_script(
-                Path(tmp) / "capture.py",
-                f"""#!/usr/bin/env python3
-from pathlib import Path
-import json
-import sys
-Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
-print("ok")
-""",
-            )
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter(["ok\n"])
+            process.wait.return_value = 0
+            process.poll.return_value = 0
 
-            result = GigaCodeExecutor(command=str(script), output=lambda _line: None).run("prompt body")
-            captured = json.loads(output_file.read_text(encoding="utf-8"))
+            result = GigaCodeExecutor(
+                command="gigacode",
+                output=lambda _line: None,
+            ).run("prompt body")
 
-            self.assertTrue(result.ok)
-            self.assertEqual(
-                [
-                    "-p",
-                    "prompt body",
-                    "--approval-mode=auto-edit",
-                    "--allowed-tools",
-                    "run_shell_command",
-                ],
-                captured["argv"],
-            )
-            self.assertEqual("", captured["stdin"])
+        self.assertTrue(result.ok)
+        popen.assert_called_once()
+        self.assertEqual(
+            [
+                "gigacode",
+                "-p",
+                "prompt body",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            popen.call_args.args[0],
+        )
+        self.assertIsNone(popen.call_args.kwargs["stdin"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
@@ -66,7 +65,7 @@ print("ok")
 from pathlib import Path
 import json
 import sys
-Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:]}}))
 print("ok")
 """,
             )
@@ -80,7 +79,6 @@ print("ok")
 
             self.assertTrue(result.ok)
             self.assertEqual(["--debug", "-p", "prompt body"], captured["argv"])
-            self.assertEqual("", captured["stdin"])
 
     def test_command_line_shows_appended_prompt_option(self) -> None:
         executor = GigaCodeExecutor(command="gigacode", args=["--debug"])
@@ -96,7 +94,7 @@ print("ok")
 from pathlib import Path
 import json
 import sys
-Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:], "stdin": sys.stdin.read()}}))
+Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:]}}))
 print("ok")
 """,
             )
@@ -110,7 +108,6 @@ print("ok")
 
             self.assertTrue(result.ok)
             self.assertEqual(["--prompt=prompt body"], captured["argv"])
-            self.assertEqual("", captured["stdin"])
 
     def test_interactive_run_passes_initial_prompt_as_argument(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
