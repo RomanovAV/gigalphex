@@ -24,9 +24,9 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 - Small task execution passed end-to-end on 2026-06-12 with the then-current
   `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`
   invocation. GigaCode created `SMOKE_TEST.md`, marked the task checkboxes,
-  committed the changes, and emitted the completion signal. The current
-  default uses the positional `query` because GigaCode now marks `-p` as
-  deprecated.
+  committed the changes, and emitted the completion signal. GigaCode marks
+  `-p` as deprecated, but this remains the confirmed unambiguous one-shot form
+  when approval and array-valued tool options are also present.
 
 The formerly unresolved item was small task execution. When the prompt was sent
 through stdin, GigaCode warned that `run_shell_command` needed approval and the
@@ -128,7 +128,7 @@ Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
 - The startup section logs
-  `gigacode '<prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command`,
+  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
@@ -338,7 +338,7 @@ Notes:
 
 ## Things to Watch Closely
 
-- Does `gigacode` accept the generated prompt as the positional `query`?
+- Does `gigacode` receive the generated prompt through `-p`?
 - Does GigaLphex pass the request through `--prompt-interactive` and keep the TUI open?
 - Does the installed `planning` skill create the exact requested plan path?
 - Does `--approval-mode=auto-edit --allowed-tools=run_shell_command` avoid

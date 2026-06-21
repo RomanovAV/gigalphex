@@ -125,6 +125,21 @@ def completed_plan_commit_message(plan_path: Path) -> str:
 
 
 def add_gigacode_args(base_args: list[str], extra_args: list[str]) -> list[str]:
+    for index, arg in enumerate(base_args):
+        if "{prompt}" in arg:
+            insertion_index = index
+            if (
+                arg == "{prompt}"
+                and index > 0
+                and base_args[index - 1]
+                in {"-p", "--prompt", "-i", "--prompt-interactive"}
+            ):
+                insertion_index = index - 1
+            return [
+                *base_args[:insertion_index],
+                *extra_args,
+                *base_args[insertion_index:],
+            ]
     return [*base_args, *extra_args]
 
 

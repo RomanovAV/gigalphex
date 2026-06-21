@@ -15,6 +15,7 @@ class ConfigTest(unittest.TestCase):
     def test_default_args_enable_noninteractive_auto_edit(self) -> None:
         self.assertEqual(
             [
+                "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
@@ -292,6 +293,7 @@ Plain text output only.
 
         self.assertEqual(
             [
+                "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
@@ -306,6 +308,7 @@ Plain text output only.
             [
                 "--model",
                 "strong-review",
+                "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
@@ -334,6 +337,7 @@ Plain text output only.
             [
                 "--model",
                 "shared-model",
+                "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
@@ -348,6 +352,7 @@ Plain text output only.
             [
                 "--model",
                 "code-model",
+                "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools=run_shell_command",
@@ -362,6 +367,7 @@ Plain text output only.
             [
                 "--model",
                 "review-model",
+                "-p",
                 "{prompt}",
                 "--allowed-tools=run_shell_command",
             ],
