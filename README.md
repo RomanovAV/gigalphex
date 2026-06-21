@@ -92,6 +92,13 @@ PYTHONPATH=python python3 -m gigalphex.cli --dry-run ../e2e/testdata/test-plan.m
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
 ```
 
+Diagnose differences between direct GigaCode and GigaLphex execution by running
+this script from the affected project directory:
+
+```bash
+/path/to/gigalphex/scripts/diagnose-gigacode.sh
+```
+
 For colleagues testing `gigalphex` on real tasks, see the short Russian guide:
 [`docs/real-task-testing-guide.md`](docs/real-task-testing-guide.md).
 
