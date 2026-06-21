@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 import os
@@ -9,6 +10,7 @@ import sys
 
 from .config import load_config
 from .executor import GigaCodeExecutor
+from .prompts import PromptContext, load_prompt_templates, render_task_prompt
 
 
 DEFAULT_PROMPT = "выполни pwd через run_shell_command"
@@ -51,7 +53,20 @@ def _run_captured(argv: list[str], log_path: Path) -> tuple[int, str]:
     return returncode, output
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Compare direct GigaCode, captured subprocess, and GigaLphex executor behavior.",
+    )
+    parser.add_argument(
+        "--plan",
+        type=Path,
+        help="also run the exact GigaLphex task prompt for this plan once",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = _parse_args()
     prompt = os.getenv("GIGALPHEX_DIAGNOSTIC_PROMPT", DEFAULT_PROMPT)
     log_dir = Path(".gigalphex/diagnostics") / datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -97,6 +112,41 @@ def main() -> int:
         print("Minimal captured subprocess works, but GigaCodeExecutor/configuration fails.")
     else:
         print("All minimal checks pass; the failure depends on the full task prompt or project operations.")
+
+    if args.plan is not None:
+        plan_file = args.plan.resolve()
+        if not plan_file.is_file():
+            print(f"\nERROR: plan file not found: {plan_file}")
+            return 2
+
+        print("\n=== 4. exact task prompt ===")
+        prompts = load_prompt_templates(cfg.prompt_dirs)
+        task_prompt = render_task_prompt(
+            prompts.task,
+            PromptContext(
+                plan_file=plan_file,
+                progress_file=log_dir / "task-progress.log",
+                default_branch=cfg.default_branch or "master",
+            ),
+        )
+        (log_dir / "task-prompt.txt").write_text(task_prompt, encoding="utf-8")
+        task_chunks: list[str] = []
+        task_result = GigaCodeExecutor(
+            command=cfg.gigacode_command,
+            args=cfg.args_for_phase("task"),
+            retry_count=0,
+            output=lambda text: (task_chunks.append(text), print(text, end=""))[-1],
+        ).run(task_prompt)
+        task_output = "".join(task_chunks)
+        (log_dir / "task-executor.log").write_text(task_output, encoding="utf-8")
+        print(f"\nexit status: {task_result.returncode}")
+        if APPROVAL_WARNING in task_output:
+            print("Result: the approval failure is triggered by the exact task prompt/tool sequence.")
+        elif task_result.ok:
+            print("Result: the exact task prompt completed without an approval warning.")
+        else:
+            print("Result: the exact task prompt failed for another reason; inspect task-executor.log.")
+
     print(f"logs: {log_dir}")
     return 0
 

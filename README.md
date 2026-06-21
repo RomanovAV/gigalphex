@@ -99,6 +99,13 @@ this Python module from the affected project directory:
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.diagnose
 ```
 
+To reproduce one exact task prompt once:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.diagnose \
+  --plan docs/plans/my-feature.md
+```
+
 For colleagues testing `gigalphex` on real tasks, see the short Russian guide:
 [`docs/real-task-testing-guide.md`](docs/real-task-testing-guide.md).
 
