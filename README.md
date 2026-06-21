@@ -21,11 +21,11 @@ Current assumption: GigaCode CLI is available in `PATH`. Task, review,
 finalize, and quick-plan sessions use one-shot mode by default:
 
 ```bash
-gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command
+gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
 ```
 
 The default argument template is
-`-p {prompt} --approval-mode=auto-edit --allowed-tools=run_shell_command`.
+`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
 GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
 `-p <generated prompt>`. GigaCode marks `-p/--prompt` as deprecated in favor of
@@ -35,7 +35,7 @@ them. The explicit `-p` form is therefore the reliable non-interactive contract
 for GigaCode 26.5.17 and is also the form recommended by its runtime approval
 error. `--approval-mode=auto-edit` allows edit/write tools, while shell commands
 such as tests and `git commit` also require
-`--allowed-tools=run_shell_command`. Output is streamed from combined
+`--allowed-tools run_shell_command`. Output is streamed from combined
 stdout/stderr back to the terminal and progress log.
 
 Interactive plan creation is different. When stdin and stdout are attached to
@@ -78,7 +78,7 @@ Observed GigaCode constraints:
 - Non-interactive runs fail if GigaCode asks for shell approval without the
   shell tool being explicitly allowed. Real logs and GigaCode help indicate that
   `--approval-mode=auto-edit` must be paired with
-  `--allowed-tools=run_shell_command`; `gigalphex` includes both by default and
+  `--allowed-tools run_shell_command`; `gigalphex` includes both by default and
   still detects the warning if it appears.
 - There is no `IN_PROGRESS` signal. Progress is inferred from process lifetime,
   terminal output, and the progress log.
@@ -212,7 +212,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools=run_shell_command
+gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
 gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 gigacode_skills_dir = ~/.gigacode/skills
 task_model =

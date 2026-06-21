@@ -35,14 +35,16 @@ class CliTest(unittest.TestCase):
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             add_gigacode_args(
                 [
                     "-p",
                     "{prompt}",
                     "--approval-mode=auto-edit",
-                    "--allowed-tools=run_shell_command",
+                    "--allowed-tools",
+                    "run_shell_command",
                 ],
                 ["--include-directories=/workspace/shared"],
             ),

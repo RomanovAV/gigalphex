@@ -18,7 +18,8 @@ class ConfigTest(unittest.TestCase):
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             Config().resolved_args,
         )
@@ -296,7 +297,8 @@ Plain text output only.
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             Config().resolved_args,
         )
@@ -311,7 +313,8 @@ Plain text output only.
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             cfg.args_for_phase("review"),
         )
@@ -340,7 +343,8 @@ Plain text output only.
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             cfg.args_for_phase("review"),
         )
@@ -355,7 +359,8 @@ Plain text output only.
                 "-p",
                 "{prompt}",
                 "--approval-mode=auto-edit",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             cfg.args_for_phase("synthesis"),
         )
@@ -369,7 +374,8 @@ Plain text output only.
                 "review-model",
                 "-p",
                 "{prompt}",
-                "--allowed-tools=run_shell_command",
+                "--allowed-tools",
+                "run_shell_command",
             ],
             cfg.args_for_review_agent(),
         )

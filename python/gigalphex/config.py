@@ -196,7 +196,7 @@ def _without_approval_mode(args: list[str]) -> list[str]:
 
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
-# gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools=run_shell_command
+# gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
 # gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 # gigacode_skills_dir = ~/.gigacode/skills
 # plan_model =

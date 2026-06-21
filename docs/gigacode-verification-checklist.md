@@ -33,9 +33,9 @@ through stdin, GigaCode warned that `run_shell_command` needed approval and the
 task failed before commit. Passing the prompt through `-p {prompt}` fixed the
 invocation shape but did not allow shell commands by itself. GigaCode help for
 26.5.17 says `--approval-mode=auto-edit` allows edit/write tools, while shell
-commands require `--allowed-tools=run_shell_command`. The current default uses
-the equivalent positional-query invocation with
-`--allowed-tools=run_shell_command`; the 2026-06-12 smoke run confirmed
+commands require `--allowed-tools run_shell_command`. The current default uses
+the confirmed explicit `-p` invocation with
+`--allowed-tools run_shell_command`; the 2026-06-12 smoke run confirmed
 autonomous commits without a manual follow-up.
 
 ## Current Retest Scope
@@ -128,7 +128,7 @@ Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
 - The startup section logs
-  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools=run_shell_command`,
+  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
@@ -341,7 +341,7 @@ Notes:
 - Does `gigacode` receive the generated prompt through `-p`?
 - Does GigaLphex pass the request through `--prompt-interactive` and keep the TUI open?
 - Does the installed `planning` skill create the exact requested plan path?
-- Does `--approval-mode=auto-edit --allowed-tools=run_shell_command` avoid
+- Does `--approval-mode=auto-edit --allowed-tools run_shell_command` avoid
   non-interactive approval failures?
 - Does any run hang without output?
 - Does generated markdown contain extra commentary or code fences?

@@ -41,7 +41,8 @@ print("ok")
                     "-p",
                     "prompt body",
                     "--approval-mode=auto-edit",
-                    "--allowed-tools=run_shell_command",
+                    "--allowed-tools",
+                    "run_shell_command",
                 ],
                 captured["argv"],
             )
@@ -52,7 +53,7 @@ print("ok")
 
         self.assertEqual(
             "gigacode -p '<prompt>' --approval-mode=auto-edit "
-            "--allowed-tools=run_shell_command",
+            "--allowed-tools run_shell_command",
             executor.command_line(),
         )
 
