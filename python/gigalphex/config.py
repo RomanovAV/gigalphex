@@ -52,7 +52,8 @@ class Config:
 
     @property
     def resolved_args(self) -> list[str]:
-        return self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS.copy()
+        args = self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS
+        return _with_noninteractive_shell_access(args)
 
     @property
     def resolved_interactive_args(self) -> list[str]:
@@ -176,6 +177,53 @@ def _optional_str(value: Optional[str]) -> Optional[str]:
 
 def _csv_list(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _with_noninteractive_shell_access(args: list[str]) -> list[str]:
+    normalized: list[str] = []
+    approval_mode_added = False
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--approval-mode":
+            if not approval_mode_added:
+                normalized.extend(["--approval-mode", "auto-edit"])
+                approval_mode_added = True
+            index += 2 if index + 1 < len(args) else 1
+            continue
+        if arg.startswith("--approval-mode="):
+            if not approval_mode_added:
+                normalized.append("--approval-mode=auto-edit")
+                approval_mode_added = True
+            index += 1
+            continue
+        normalized.append(arg)
+        index += 1
+
+    if not approval_mode_added:
+        normalized.append("--approval-mode=auto-edit")
+
+    for index, arg in enumerate(normalized):
+        if arg == "--allowed-tools":
+            tool_index = index + 1
+            while tool_index < len(normalized) and not normalized[tool_index].startswith("-"):
+                if normalized[tool_index] == "run_shell_command":
+                    return normalized
+                tool_index += 1
+            normalized.insert(index + 1, "run_shell_command")
+            return normalized
+        if arg.startswith("--allowed-tools="):
+            tools = [tool for tool in arg.split("=", 1)[1].split(",") if tool]
+            if "run_shell_command" not in tools:
+                tools.insert(0, "run_shell_command")
+            normalized[index:index + 1] = [
+                "--allowed-tools",
+                *tools,
+            ]
+            return normalized
+
+    normalized.extend(["--allowed-tools", "run_shell_command"])
+    return normalized
 
 
 DEFAULT_CONFIG_TEXT = """[gigalphex]

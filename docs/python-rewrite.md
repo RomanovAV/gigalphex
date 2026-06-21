@@ -49,8 +49,9 @@ and git commands; `--approval-mode=auto-edit` only covers edit/write tools.
 Although GigaCode marks `-p/--prompt` as deprecated, its positional `query..`
 form is ambiguous when combined with array-valued options. The runtime itself
 recommends `-p` on non-interactive approval failures. If custom args omit
-`{prompt}`, the executor sends the generated prompt through stdin, matching the
-behavior of the last verified executor implementation.
+`{prompt}`, the executor adds `-p <generated prompt>` rather than using stdin.
+Configured non-interactive arguments are normalized so every phase retains
+`--approval-mode=auto-edit` and permission for `run_shell_command`.
 If the CLI later needs a subcommand or different flags, the executor boundary
 is `GigaCodeExecutor`, so adapting the invocation should be one local change.
 

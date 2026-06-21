@@ -27,8 +27,12 @@ gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_s
 The default argument template is
 `-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
-GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex sends
-the generated prompt through stdin, preserving the verified legacy behavior.
+GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
+`-p <generated prompt>` instead of sending a non-interactive prompt through
+stdin.
+Custom non-interactive arguments cannot disable shell execution accidentally:
+GigaLphex normalizes every plan, task, review, synthesis, and finalize invocation
+to include `--approval-mode=auto-edit` and allow `run_shell_command`.
 GigaCode marks `-p/--prompt` as deprecated in favor of
 the positional query, but its variadic `query..` parser consumes options placed
 after the query, while array-valued options can consume a query placed after

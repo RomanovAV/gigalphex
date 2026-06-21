@@ -129,6 +129,8 @@ class GigaCodeExecutor:
 
     def command_line(self) -> str:
         safe_args = [arg.replace("{prompt}", "<prompt>") for arg in self.args]
+        if not any("{prompt}" in arg for arg in self.args):
+            safe_args.extend(["-p", "<prompt>"])
         return shlex.join([self.command, *safe_args])
 
     def _run_with_retries(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
@@ -162,10 +164,11 @@ class GigaCodeExecutor:
 
     def _run(self, prompt: str, output: Callable[[str], None]) -> ExecResult:
         argv, stdin_prompt = self._build_invocation(prompt)
+        pipe_stdin = bool(stdin_prompt)
         try:
             proc = subprocess.Popen(
                 argv,
-                stdin=subprocess.PIPE,
+                stdin=subprocess.PIPE if pipe_stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -175,10 +178,11 @@ class GigaCodeExecutor:
         except FileNotFoundError as exc:
             raise RuntimeError(f"gigacode command not found: {self.command}") from exc
 
-        assert proc.stdin is not None
         assert proc.stdout is not None
-        proc.stdin.write(stdin_prompt)
-        proc.stdin.close()
+        if pipe_stdin:
+            assert proc.stdin is not None
+            proc.stdin.write(stdin_prompt)
+            proc.stdin.close()
 
         chunks: list[str] = []
         timed_out = False
@@ -266,7 +270,8 @@ class GigaCodeExecutor:
         if not used_placeholder:
             if require_placeholder:
                 return [self.command, *args], prompt
-        return [self.command, *args], "" if used_placeholder else prompt
+            args.extend(["-p", prompt])
+        return [self.command, *args], ""
 
 
 def matches_any(text: str, patterns: list[str]) -> bool:

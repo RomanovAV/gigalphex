@@ -8,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.config import Config, init_global_config, init_global_prompt_templates, load_config
+from gigalphex.executor import GigaCodeExecutor
 from gigalphex.prompts import DEFAULT_PROMPTS
 
 
@@ -84,6 +85,50 @@ wait_on_rate_limit = 12.5
             self.assertEqual(["temporary one", "temporary two"], cfg.retry_patterns)
             self.assertEqual(["limit one", "limit two"], cfg.rate_limit_patterns)
             self.assertEqual(12.5, cfg.wait_on_rate_limit)
+
+    def test_loaded_custom_args_cannot_drop_noninteractive_shell_access(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config"
+            config.write_text(
+                "[gigalphex]\ngigacode_args = --debug\n",
+                encoding="utf-8",
+            )
+
+            args = load_config(config).resolved_args
+            self.assertEqual(
+                [
+                    "--debug",
+                    "--approval-mode=auto-edit",
+                    "--allowed-tools",
+                    "run_shell_command",
+                ],
+                args,
+            )
+            self.assertIn("-p '<prompt>'", GigaCodeExecutor(args=args).command_line())
+
+    def test_environment_custom_args_cannot_drop_noninteractive_shell_access(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            with patch.dict(
+                os.environ,
+                {
+                    "HOME": str(home),
+                    "GIGALPHEX_GIGACODE_ARGS": "-p {prompt}",
+                },
+                clear=True,
+            ):
+                cfg = load_config()
+
+            self.assertEqual(
+                [
+                    "-p",
+                    "{prompt}",
+                    "--approval-mode=auto-edit",
+                    "--allowed-tools",
+                    "run_shell_command",
+                ],
+                cfg.resolved_args,
+            )
 
     def test_load_config_reads_interactive_gigacode_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -319,6 +364,104 @@ Plain text output only.
             cfg.args_for_phase("review"),
         )
 
+    def test_custom_args_cannot_drop_noninteractive_shell_access(self) -> None:
+        cfg = Config(gigacode_args=["-p", "{prompt}", "--debug"])
+
+        self.assertEqual(
+            [
+                "-p",
+                "{prompt}",
+                "--debug",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.resolved_args,
+        )
+
+    def test_custom_args_replace_incompatible_approval_mode_and_keep_other_tools(self) -> None:
+        cfg = Config(
+            gigacode_args=[
+                "-p",
+                "{prompt}",
+                "--approval-mode",
+                "default",
+                "--allowed-tools",
+                "read_file",
+            ]
+        )
+
+        self.assertEqual(
+            [
+                "-p",
+                "{prompt}",
+                "--approval-mode",
+                "auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+                "read_file",
+            ],
+            cfg.resolved_args,
+        )
+
+    def test_equals_allowed_tools_form_is_normalized_for_shell_access(self) -> None:
+        cfg = Config(gigacode_args=["-p", "{prompt}", "--allowed-tools=read_file"])
+
+        self.assertEqual(
+            [
+                "-p",
+                "{prompt}",
+                "--allowed-tools",
+                "run_shell_command",
+                "read_file",
+                "--approval-mode=auto-edit",
+            ],
+            cfg.resolved_args,
+        )
+
+    def test_equals_allowed_tools_shell_form_is_converted_to_supported_syntax(self) -> None:
+        cfg = Config(
+            gigacode_args=[
+                "-p",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+                "--allowed-tools=run_shell_command",
+            ]
+        )
+
+        self.assertEqual(
+            [
+                "-p",
+                "{prompt}",
+                "--approval-mode=auto-edit",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
+            cfg.resolved_args,
+        )
+
+    def test_all_noninteractive_phases_keep_shell_access_after_override(self) -> None:
+        cfg = Config(
+            gigacode_args=["--debug"],
+            plan_model="plan",
+            task_model="task",
+            review_model="review",
+            finalize_model="finalize",
+        )
+
+        phase_args = [
+            cfg.args_for_phase("plan"),
+            cfg.args_for_phase("task"),
+            cfg.args_for_review_agent(),
+            cfg.args_for_phase("synthesis"),
+            cfg.args_for_phase("finalize"),
+        ]
+        for args in phase_args:
+            self.assertIn("--approval-mode=auto-edit", args)
+            allowed_tools = args.index("--allowed-tools")
+            self.assertEqual("run_shell_command", args[allowed_tools + 1])
+            self.assertIn("-p '<prompt>'", GigaCodeExecutor(args=args).command_line())
+
     def test_interactive_plan_args_include_plan_model(self) -> None:
         cfg = Config(plan_model="planning-model")
 
@@ -392,7 +535,14 @@ Plain text output only.
         )
 
         self.assertEqual(
-            ["--approval-mode", "auto-edit", "--debug", "{prompt}"],
+            [
+                "--approval-mode",
+                "auto-edit",
+                "--debug",
+                "{prompt}",
+                "--allowed-tools",
+                "run_shell_command",
+            ],
             cfg.args_for_review_agent(),
         )
 
