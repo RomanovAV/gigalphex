@@ -43,7 +43,7 @@
 
 The Python version is intentionally small first. It launches `gigacode` in
 one-shot mode with
-`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command` by
+`--approval-mode=auto-edit --allowed-tools run_shell_command -p {prompt}` by
 default. GigaCode 26.5.17 needs `--allowed-tools run_shell_command` for tests
 and git commands; `--approval-mode=auto-edit` only covers edit/write tools.
 Although GigaCode marks `-p/--prompt` as deprecated, its positional `query..`
@@ -101,7 +101,7 @@ Configure command shape:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+gigacode_args = --approval-mode=auto-edit --allowed-tools run_shell_command -p {prompt}
 gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 gigacode_skills_dir = ~/.gigacode/skills
 default_branch =

@@ -21,9 +21,10 @@ These checks passed in prior verification runs with GigaCode `26.5.17`:
 - Custom `.gigalphex/prompts/make_plan.txt` overrode the embedded prompt.
 - The previous newline fix worked: `created plan:` and `progress log:` no
   longer stick to the last line of GigaCode output.
-- Small task execution passed end-to-end on 2026-06-12 with the then-current
-  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`
-  invocation. GigaCode created `SMOKE_TEST.md`, marked the task checkboxes,
+- Small task execution passed end-to-end on 2026-06-12 with the same explicit
+  prompt and shell-policy flags (the current canonical ordering is
+  `gigacode --approval-mode=auto-edit --allowed-tools run_shell_command -p '<prompt>'`).
+  GigaCode created `SMOKE_TEST.md`, marked the task checkboxes,
   committed the changes, and emitted the completion signal. GigaCode marks
   `-p` as deprecated, but this remains the confirmed unambiguous one-shot form
   when approval and array-valued tool options are also present.
@@ -128,7 +129,7 @@ Expected:
 
 - No warning like `Tool "run_shell_command" requires user approval`.
 - The startup section logs
-  `gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command`,
+  `gigacode --approval-mode=auto-edit --allowed-tools run_shell_command -p '<prompt>'`,
   not the full prompt text.
 - `SMOKE_TEST.md` is created and contains a non-empty sentence.
 - The checkbox in the plan is marked `[x]`.
@@ -157,7 +158,7 @@ PYTHONPATH=/Users/19268765/IdeaProjects/gigalphex-new/python:$PYTHONPATH python3
 
 Observed:
 - No non-interactive shell approval warning.
-- Startup logged (historical run): gigacode -p '<prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
+- Startup logged: gigacode --approval-mode=auto-edit --allowed-tools run_shell_command -p '<prompt>'
 - Created SMOKE_TEST.md with a non-empty sentence.
 - Marked all three Task 1 checkboxes as [x].
 - Created commits:

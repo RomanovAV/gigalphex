@@ -12,11 +12,11 @@ class DiagnoseTest(unittest.TestCase):
         self.assertEqual(
             [
                 "gigacode",
-                "-p",
-                "check shell",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "check shell",
             ],
             _argv("check shell"),
         )

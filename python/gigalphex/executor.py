@@ -13,6 +13,11 @@ from .defaults import DEFAULT_GIGACODE_ARGS
 from .signals import detect_signal
 
 
+APPROVAL_UNAVAILABLE_TEXT = (
+    "requires user approval but cannot execute in non-interactive mode"
+)
+
+
 DEFAULT_TRANSIENT_RETRY_PATTERNS = [
     "FYA_TRANSIENT_TIMEOUT",
     "API Error: 529",
@@ -53,11 +58,12 @@ class ExecResult:
             and not self.idle_timed_out
             and not self.transient_error
             and not self.rate_limited
+            and not self.approval_unavailable
         )
 
     @property
     def approval_unavailable(self) -> bool:
-        return "requires user approval but cannot execute in non-interactive mode" in self.output
+        return APPROVAL_UNAVAILABLE_TEXT in self.output
 
 
 class GigaCodeExecutor:
@@ -143,6 +149,8 @@ class GigaCodeExecutor:
             result.attempts = attempt
             if result.ok:
                 return result
+            if result.approval_unavailable:
+                return result
             last = result
             if attempt < attempts:
                 delay = self._retry_delay(result)
@@ -225,6 +233,8 @@ class GigaCodeExecutor:
                 reset_idle_timer()
                 chunks.append(line)
                 output(line)
+                if APPROVAL_UNAVAILABLE_TEXT in line:
+                    kill_process()
             returncode = proc.wait()
         except KeyboardInterrupt:
             proc.kill()

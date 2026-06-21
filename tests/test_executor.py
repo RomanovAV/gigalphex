@@ -37,11 +37,11 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(
             [
                 "gigacode",
-                "-p",
-                "prompt body",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "prompt body",
             ],
             popen.call_args.args[0],
         )
@@ -51,10 +51,31 @@ class ExecutorTest(unittest.TestCase):
         executor = GigaCodeExecutor(command="gigacode")
 
         self.assertEqual(
-            "gigacode -p '<prompt>' --approval-mode=auto-edit "
-            "--allowed-tools run_shell_command",
+            "gigacode --approval-mode=auto-edit "
+            "--allowed-tools run_shell_command -p '<prompt>'",
             executor.command_line(),
         )
+
+    def test_prompt_remains_one_exact_argv_value_after_policy_options(self) -> None:
+        prompt = "first line\nsecond line with 'quotes' and \"double quotes\""
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter([])
+            process.wait.return_value = 0
+            process.poll.return_value = 0
+
+            result = GigaCodeExecutor(
+                command="gigacode",
+                output=lambda _line: None,
+            ).run(prompt)
+
+        self.assertTrue(result.ok)
+        argv = popen.call_args.args[0]
+        self.assertEqual("-p", argv[-2])
+        self.assertEqual(prompt, argv[-1])
+        self.assertEqual(1, argv.count(prompt))
+        self.assertIsNone(popen.call_args.kwargs["stdin"])
 
     def test_custom_args_without_prompt_placeholder_append_prompt_option(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -161,10 +182,54 @@ sys.stdout.write("no newline")
     def test_detects_noninteractive_approval_warning(self) -> None:
         result = ExecResult(
             output='Warning: Tool "write_file" requires user approval but cannot execute in non-interactive mode\n',
-            returncode=1,
+            returncode=0,
         )
 
         self.assertTrue(result.approval_unavailable)
+        self.assertFalse(result.ok)
+
+    def test_does_not_retry_noninteractive_approval_failure(self) -> None:
+        executor = GigaCodeExecutor(
+            retry_count=3,
+            retry_delay=0,
+            output=lambda _line: None,
+        )
+        approval_failure = ExecResult(
+            output=(
+                'Warning: Tool "run_shell_command" requires user approval '
+                "but cannot execute in non-interactive mode\n"
+            ),
+            returncode=0,
+        )
+
+        with patch.object(executor, "_run_once", return_value=approval_failure) as run_once:
+            result = executor.run("prompt")
+
+        self.assertFalse(result.ok)
+        self.assertTrue(result.approval_unavailable)
+        self.assertEqual(1, result.attempts)
+        run_once.assert_called_once()
+
+    def test_kills_session_on_first_noninteractive_approval_warning(self) -> None:
+        warning = (
+            'Warning: Tool "run_shell_command" requires user approval '
+            "but cannot execute in non-interactive mode.\n"
+        )
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter([warning])
+            process.poll.return_value = None
+            process.wait.return_value = -9
+
+            result = GigaCodeExecutor(
+                command="gigacode",
+                output=lambda _line: None,
+            ).run("prompt")
+
+        process.kill.assert_called_once_with()
+        self.assertTrue(result.approval_unavailable)
+        self.assertFalse(result.ok)
 
     def test_retries_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

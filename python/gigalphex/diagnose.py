@@ -20,11 +20,11 @@ APPROVAL_WARNING = "requires user approval but cannot execute in non-interactive
 def _argv(prompt: str) -> list[str]:
     return [
         "gigacode",
-        "-p",
-        prompt,
         "--approval-mode=auto-edit",
         "--allowed-tools",
         "run_shell_command",
+        "-p",
+        prompt,
     ]
 
 

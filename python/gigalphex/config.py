@@ -53,7 +53,9 @@ class Config:
     @property
     def resolved_args(self) -> list[str]:
         args = self.gigacode_args if self.gigacode_args is not None else DEFAULT_GIGACODE_ARGS
-        return _with_noninteractive_shell_access(args)
+        return _with_prompt_after_noninteractive_options(
+            _with_noninteractive_shell_access(args)
+        )
 
     @property
     def resolved_interactive_args(self) -> list[str]:
@@ -226,9 +228,37 @@ def _with_noninteractive_shell_access(args: list[str]) -> list[str]:
     return normalized
 
 
+def _with_prompt_after_noninteractive_options(args: list[str]) -> list[str]:
+    remaining: list[str] = []
+    prompt_args: list[str] = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if (
+            arg in {"-p", "--prompt"}
+            and index + 1 < len(args)
+            and "{prompt}" in args[index + 1]
+        ):
+            prompt_args = ["-p", args[index + 1]]
+            index += 2
+            continue
+        if arg.startswith("--prompt=") and "{prompt}" in arg:
+            prompt_args = ["-p", arg.split("=", 1)[1]]
+            index += 1
+            continue
+        if arg == "{prompt}":
+            prompt_args = ["-p", arg]
+            index += 1
+            continue
+        remaining.append(arg)
+        index += 1
+
+    return [*remaining, *prompt_args]
+
+
 DEFAULT_CONFIG_TEXT = """[gigalphex]
 # gigacode_command = gigacode
-# gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+# gigacode_args = --approval-mode=auto-edit --allowed-tools run_shell_command -p {prompt}
 # gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 # gigacode_skills_dir = ~/.gigacode/skills
 # plan_model =

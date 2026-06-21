@@ -21,11 +21,11 @@ Current assumption: GigaCode CLI is available in `PATH`. Task, review,
 finalize, and quick-plan sessions use one-shot mode by default:
 
 ```bash
-gigacode -p '<generated prompt>' --approval-mode=auto-edit --allowed-tools run_shell_command
+gigacode --approval-mode=auto-edit --allowed-tools run_shell_command -p '<generated prompt>'
 ```
 
 The default argument template is
-`-p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command`.
+`--approval-mode=auto-edit --allowed-tools run_shell_command -p {prompt}`.
 `gigalphex` replaces `{prompt}` with the generated prompt before invoking
 GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
 `-p <generated prompt>` instead of sending a non-interactive prompt through
@@ -232,7 +232,7 @@ Configure GigaCode:
 ```ini
 [gigalphex]
 gigacode_command = gigacode
-gigacode_args = -p {prompt} --approval-mode=auto-edit --allowed-tools run_shell_command
+gigacode_args = --approval-mode=auto-edit --allowed-tools run_shell_command -p {prompt}
 gigacode_interactive_args = --prompt-interactive {prompt} --approval-mode=auto-edit
 gigacode_skills_dir = ~/.gigacode/skills
 task_model =

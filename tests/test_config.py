@@ -16,11 +16,11 @@ class ConfigTest(unittest.TestCase):
     def test_default_args_enable_noninteractive_auto_edit(self) -> None:
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             Config().resolved_args,
         )
@@ -121,11 +121,11 @@ wait_on_rate_limit = 12.5
 
             self.assertEqual(
                 [
-                    "-p",
-                    "{prompt}",
                     "--approval-mode=auto-edit",
                     "--allowed-tools",
                     "run_shell_command",
+                    "-p",
+                    "{prompt}",
                 ],
                 cfg.resolved_args,
             )
@@ -339,11 +339,11 @@ Plain text output only.
 
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             Config().resolved_args,
         )
@@ -355,11 +355,11 @@ Plain text output only.
             [
                 "--model",
                 "strong-review",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -369,12 +369,12 @@ Plain text output only.
 
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--debug",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.resolved_args,
         )
@@ -393,13 +393,13 @@ Plain text output only.
 
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--approval-mode",
                 "auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
                 "read_file",
+                "-p",
+                "{prompt}",
             ],
             cfg.resolved_args,
         )
@@ -409,12 +409,12 @@ Plain text output only.
 
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--allowed-tools",
                 "run_shell_command",
                 "read_file",
                 "--approval-mode=auto-edit",
+                "-p",
+                "{prompt}",
             ],
             cfg.resolved_args,
         )
@@ -431,11 +431,32 @@ Plain text output only.
 
         self.assertEqual(
             [
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
+            ],
+            cfg.resolved_args,
+        )
+
+    def test_embedded_prompt_form_is_moved_after_array_options(self) -> None:
+        cfg = Config(
+            gigacode_args=[
+                "--prompt={prompt}",
+                "--allowed-tools",
+                "read_file",
+            ]
+        )
+
+        self.assertEqual(
+            [
+                "--allowed-tools",
+                "run_shell_command",
+                "read_file",
+                "--approval-mode=auto-edit",
+                "-p",
+                "{prompt}",
             ],
             cfg.resolved_args,
         )
@@ -483,11 +504,11 @@ Plain text output only.
             [
                 "--model",
                 "shared-model",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.args_for_phase("review"),
         )
@@ -499,11 +520,11 @@ Plain text output only.
             [
                 "--model",
                 "code-model",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.args_for_phase("synthesis"),
         )
@@ -515,11 +536,11 @@ Plain text output only.
             [
                 "--model",
                 "review-model",
-                "-p",
-                "{prompt}",
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.args_for_review_agent(),
         )
@@ -539,9 +560,10 @@ Plain text output only.
                 "--approval-mode",
                 "auto-edit",
                 "--debug",
-                "{prompt}",
                 "--allowed-tools",
                 "run_shell_command",
+                "-p",
+                "{prompt}",
             ],
             cfg.args_for_review_agent(),
         )
