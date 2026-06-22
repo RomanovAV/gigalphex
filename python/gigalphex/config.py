@@ -36,7 +36,7 @@ class Config:
     max_iterations: int = 50
     review_iterations: int = 5
     finalize_enabled: bool = True
-    session_timeout: Optional[int] = None
+    session_timeout: Optional[int] = 1800
     idle_timeout: Optional[int] = 900
     retry_count: int = 1
     retry_delay: float = 5.0

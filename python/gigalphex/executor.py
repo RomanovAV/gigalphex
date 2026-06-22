@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import signal
 import subprocess
 import shlex
 import sys
@@ -23,6 +24,8 @@ from .stats import InvocationStat, RunStatistics, TokenUsage
 APPROVAL_UNAVAILABLE_TEXT = (
     "requires user approval but cannot execute in non-interactive mode"
 )
+PROCESS_TERMINATION_GRACE_SECONDS = 2.0
+PROCESS_TERMINATION_POLL_SECONDS = 0.05
 
 
 DEFAULT_TRANSIENT_RETRY_PATTERNS = [
@@ -314,6 +317,7 @@ class GigaCodeExecutor:
                 stdin=subprocess.PIPE if pipe_stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                start_new_session=os.name == "posix",
             )
         except FileNotFoundError as exc:
             self._event(session, "launch_failed", error="command_not_found")
@@ -338,21 +342,62 @@ class GigaCodeExecutor:
         timed_out = False
         idle_timed_out = False
         first_output_seen = False
+        process_group = proc.pid if os.name == "posix" else None
+        termination_lock = threading.Lock()
+        termination_started = False
 
-        def kill_process(reason: str) -> None:
-            if proc.poll() is None:
-                self._event(session, "terminating", reason=reason)
-                proc.kill()
+        def terminate_process(reason: str) -> None:
+            nonlocal termination_started
+            with termination_lock:
+                if termination_started:
+                    return
+                termination_started = True
+                if process_group is not None:
+                    _terminate_process_group(
+                        proc,
+                        process_group=process_group,
+                        grace_seconds=PROCESS_TERMINATION_GRACE_SECONDS,
+                        poll_seconds=PROCESS_TERMINATION_POLL_SECONDS,
+                        event=lambda event, **fields: self._event(
+                            session,
+                            event,
+                            reason=reason,
+                            **fields,
+                        ),
+                    )
+                    return
+
+                if proc.poll() is not None:
+                    return
+                self._event(
+                    session,
+                    "terminating",
+                    reason=reason,
+                    signal="terminate",
+                    target="process",
+                )
+                proc.terminate()
+                try:
+                    proc.wait(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+                except subprocess.TimeoutExpired:
+                    self._event(
+                        session,
+                        "termination_escalated",
+                        reason=reason,
+                        signal="kill",
+                        target="process",
+                    )
+                    proc.kill()
 
         def kill_on_timeout() -> None:
             nonlocal timed_out
             timed_out = True
-            kill_process("session_timeout")
+            terminate_process("session_timeout")
 
         def kill_on_idle_timeout() -> None:
             nonlocal idle_timed_out
             idle_timed_out = True
-            kill_process("idle_timeout")
+            terminate_process("idle_timeout")
 
         timer: Optional[threading.Timer] = None
         idle_timer: Optional[threading.Timer] = None
@@ -434,7 +479,7 @@ class GigaCodeExecutor:
                 if APPROVAL_UNAVAILABLE_TEXT in approval_scan:
                     approval_denied = True
                     self._event(session, "approval_warning_detected")
-                    kill_process("approval_unavailable")
+                    terminate_process("approval_unavailable")
 
             final_stdout = stdout_decoder.decode(b"", final=True)
             if final_stdout:
@@ -451,7 +496,7 @@ class GigaCodeExecutor:
             returncode = proc.wait()
         except KeyboardInterrupt:
             self._event(session, "interrupted")
-            proc.kill()
+            terminate_process("interrupted")
             proc.wait()
             raise
         finally:
@@ -576,6 +621,49 @@ class GigaCodeExecutor:
 def matches_any(text: str, patterns: list[str]) -> bool:
     lowered = text.lower()
     return any(pattern and pattern.lower() in lowered for pattern in patterns)
+
+
+def _terminate_process_group(
+    proc: subprocess.Popen[bytes],
+    *,
+    process_group: int,
+    grace_seconds: float,
+    poll_seconds: float,
+    event: Callable[..., None],
+) -> None:
+    event("terminating", signal="SIGTERM", target="process_group")
+    try:
+        os.killpg(process_group, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        event("termination_fallback", signal="SIGKILL", target="process")
+        proc.kill()
+        return
+
+    deadline = time.monotonic() + max(0.0, grace_seconds)
+    while time.monotonic() < deadline:
+        if not _process_group_exists(process_group):
+            return
+        time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
+
+    if not _process_group_exists(process_group):
+        return
+    event("termination_escalated", signal="SIGKILL", target="process_group")
+    try:
+        os.killpg(process_group, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def _process_group_exists(process_group: int) -> bool:
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _with_stream_json_output(args: list[str]) -> list[str]:

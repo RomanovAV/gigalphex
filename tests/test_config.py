@@ -56,6 +56,9 @@ class ConfigTest(unittest.TestCase):
     def test_idle_timeout_defaults_to_fifteen_minutes(self) -> None:
         self.assertEqual(900, Config().idle_timeout)
 
+    def test_session_timeout_defaults_to_thirty_minutes(self) -> None:
+        self.assertEqual(1800, Config().session_timeout)
+
     def test_retry_count_defaults_to_one_retry(self) -> None:
         self.assertEqual(1, Config().retry_count)
 

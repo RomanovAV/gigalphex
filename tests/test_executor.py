@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -49,6 +50,7 @@ class ExecutorTest(unittest.TestCase):
             popen.call_args.args[0],
         )
         self.assertIsNone(popen.call_args.kwargs["stdin"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
         executor = GigaCodeExecutor(command="gigacode")
@@ -595,6 +597,43 @@ time.sleep(5)
             self.assertLess(time.monotonic() - start, 3)
             self.assertTrue(result.timed_out)
             self.assertFalse(result.ok)
+
+    @unittest.skipUnless(os.name == "posix", "process groups require POSIX")
+    def test_timeout_terminates_descendant_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            heartbeat = tmp_path / "heartbeat.txt"
+            child_code = (
+                "import signal,time\n"
+                "from pathlib import Path\n"
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                f"path = Path({str(heartbeat)!r})\n"
+                "while True:\n"
+                "    with path.open('a') as fh:\n"
+                "        fh.write('.')\n"
+                "    time.sleep(0.05)\n"
+            )
+            script = write_script(
+                tmp_path / "spawn_child.py",
+                f"""#!/usr/bin/env python3
+import subprocess
+import sys
+subprocess.Popen([sys.executable, "-c", {child_code!r}])
+""",
+            )
+
+            start = time.monotonic()
+            result = GigaCodeExecutor(
+                command=str(script),
+                timeout=0.5,
+                output=lambda _line: None,
+            ).run("prompt")
+
+            self.assertLess(time.monotonic() - start, 4)
+            self.assertTrue(result.timed_out)
+            size_after_return = heartbeat.stat().st_size
+            time.sleep(0.2)
+            self.assertEqual(size_after_return, heartbeat.stat().st_size)
 
     def test_idle_timeout_marks_result_after_silent_period(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
