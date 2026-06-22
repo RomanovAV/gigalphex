@@ -228,6 +228,13 @@ Review behavior:
 - kill stuck sessions with `--session-timeout SECONDS`
 - kill silent sessions with `--idle-timeout SECONDS`
 - retry failed sessions with `--retry-count N --retry-delay SECONDS`
+- before retrying an incomplete task, GigaLphex restores the plan snapshot from
+  the start of that iteration so the retry selects the same task; partial code
+  changes remain available for the next attempt
+- if a task session times out after a clean task commit, the completed
+  iteration is accepted without rerunning the task agent
+- only exhausted task retries stop for operator inspection; the plan is restored
+  to the current task before the run exits
 - classify transient failures with `retry_patterns`
 - classify rate limits with `rate_limit_patterns`; pass
   `--wait-on-rate-limit SECONDS` to wait longer before retrying those failures

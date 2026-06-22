@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from gigalphex.executor import ExecResult
+from gigalphex.executor import ExecResult, GigaCodeExecutor
 from gigalphex.progress import ProgressLog
 from gigalphex.runner import RunOptions, Runner
 from gigalphex.signals import FINALIZE_DONE, REVIEW_DONE
@@ -25,7 +25,7 @@ class FakeExecutor:
             for name in prompts
         }
 
-    def run(self, prompt):
+    def run(self, prompt, *, retry_guard=None):
         self.single_prompts.append(prompt)
         if "specialist review agents have returned" in prompt:
             return ExecResult(output=REVIEW_DONE, signal=REVIEW_DONE, returncode=0)
@@ -36,7 +36,7 @@ class CallbackExecutor:
     def __init__(self, callback):
         self.callback = callback
 
-    def run(self, prompt):
+    def run(self, prompt, *, retry_guard=None):
         return self.callback(prompt)
 
 
@@ -234,6 +234,225 @@ class RunnerTest(unittest.TestCase):
             )
 
             runner.run_tasks()
+
+    def test_task_timeout_after_clean_commit_is_recovered_without_retry(self) -> None:
+        with temporary_repo() as (repo, plan):
+            executor = GigaCodeExecutor(
+                retry_count=1,
+                retry_delay=0,
+                output=lambda _line: None,
+            )
+
+            def complete_then_timeout(_prompt, _output, _session):
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete task")
+                return ExecResult(
+                    output="completed but became silent\n",
+                    returncode=-9,
+                    idle_timed_out=True,
+                )
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                executor,
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with unittest.mock.patch.object(
+                executor,
+                "_run_once",
+                side_effect=complete_then_timeout,
+            ) as run_once:
+                runner.run_tasks()
+
+            run_once.assert_called_once()
+            progress = (repo / "progress.txt").read_text(encoding="utf-8")
+            self.assertIn("event=retry_guard_rejected", progress)
+            self.assertIn("event=failure_recovered", progress)
+
+    def test_task_failure_retries_when_repository_is_unchanged(self) -> None:
+        with temporary_repo() as (repo, plan):
+            executor = GigaCodeExecutor(
+                retry_count=1,
+                retry_delay=0,
+                output=lambda _line: None,
+            )
+            attempts = 0
+
+            def fail_then_complete(_prompt, _output, _session):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    return ExecResult(
+                        output="temporary failure\n",
+                        returncode=7,
+                    )
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete task")
+                return ExecResult(output="completed\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                executor,
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with unittest.mock.patch.object(
+                executor,
+                "_run_once",
+                side_effect=fail_then_complete,
+            ) as run_once:
+                runner.run_tasks()
+
+            self.assertEqual(2, run_once.call_count)
+
+    def test_task_failure_with_partial_changes_restores_plan_and_retries(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                plan.read_text(encoding="utf-8")
+                + """
+
+### Task 2: Follow-up
+- [ ] Complete the follow-up
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: add follow-up task")
+            executor = GigaCodeExecutor(
+                retry_count=1,
+                retry_delay=0,
+                output=lambda _line: None,
+            )
+            attempts = 0
+
+            def partial_then_complete(_prompt, _output, _session):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    restored = plan.read_text(encoding="utf-8")
+                    self.assertIn("- [ ] Complete the implementation", restored)
+                    self.assertIn("- [ ] Complete the follow-up", restored)
+                    plan.write_text(
+                        restored.replace(
+                            "- [ ] Complete the implementation",
+                            "- [x] Complete the implementation",
+                        ),
+                        encoding="utf-8",
+                    )
+                    git(repo, "add", str(plan), "partial.txt")
+                    git(repo, "commit", "-m", "feat: complete partial task")
+                    return ExecResult(output="completed\n", returncode=0)
+                if attempts == 3:
+                    current = plan.read_text(encoding="utf-8")
+                    self.assertIn("- [x] Complete the implementation", current)
+                    self.assertIn("- [ ] Complete the follow-up", current)
+                    plan.write_text(
+                        current.replace(
+                            "- [ ] Complete the follow-up",
+                            "- [x] Complete the follow-up",
+                        ),
+                        encoding="utf-8",
+                    )
+                    git(repo, "add", str(plan))
+                    git(repo, "commit", "-m", "feat: complete follow-up task")
+                    return ExecResult(output="completed\n", returncode=0)
+
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                (repo / "partial.txt").write_text("unfinished\n", encoding="utf-8")
+                return ExecResult(
+                    output="became silent\n",
+                    returncode=-9,
+                    idle_timed_out=True,
+                )
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                executor,
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with unittest.mock.patch.object(
+                executor,
+                "_run_once",
+                side_effect=partial_then_complete,
+            ) as run_once:
+                runner.run_tasks()
+
+            self.assertEqual(3, run_once.call_count)
+            progress = (repo / "progress.txt").read_text(encoding="utf-8")
+            self.assertIn("event=plan_snapshot_restored", progress)
+
+    def test_exhausted_partial_task_restores_current_plan_before_stopping(self) -> None:
+        with temporary_repo() as (repo, plan):
+            executor = GigaCodeExecutor(
+                retry_count=1,
+                retry_delay=0,
+                output=lambda _line: None,
+            )
+
+            def leave_partial_change_then_timeout(_prompt, _output, _session):
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                (repo / "partial.txt").write_text("unfinished\n", encoding="utf-8")
+                return ExecResult(
+                    output="became silent\n",
+                    returncode=-9,
+                    idle_timed_out=True,
+                )
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                executor,
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with unittest.mock.patch.object(
+                executor,
+                "_run_once",
+                side_effect=leave_partial_change_then_timeout,
+            ) as run_once:
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "automatic retries were exhausted.*git status --short.*--allow-dirty",
+                ):
+                    runner.run_tasks()
+
+            self.assertEqual(2, run_once.call_count)
+            self.assertIn("- [ ] Complete the implementation", plan.read_text(encoding="utf-8"))
 
     def test_finalize_requires_success_signal(self) -> None:
         with temporary_repo() as (repo, plan):

@@ -86,13 +86,59 @@ class Runner:
 
         for iteration in range(1, self.options.max_iterations + 1):
             task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index()
+            plan_before = self.options.plan_file.read_text(encoding="utf-8")
             head_before = self._git().head_commit() if task_index is not None else ""
             dirty_before = self._uncommitted_paths()
             self.log.section(f"task iteration {task_index or iteration}")
-            result = self.executor.run(prompt)
+            result = self.executor.run(
+                prompt,
+                retry_guard=(
+                    lambda _result: self._prepare_task_retry(
+                        task_index,
+                        plan_before,
+                        head_before,
+                        dirty_before,
+                    )
+                    if task_index is not None
+                    else True
+                ),
+            )
             if not result.ok:
-                raise RuntimeError(describe_failure("gigacode task session", result))
+                if task_index is None or not self._task_iteration_completed_cleanly(
+                    task_index,
+                    head_before,
+                    dirty_before,
+                ):
+                    if task_index is not None:
+                        self._restore_plan_snapshot(
+                            plan_before,
+                            task_index,
+                            reason="attempts_exhausted",
+                        )
+                    if task_index is not None and (
+                        self._git().head_commit() != head_before
+                        or self._uncommitted_paths() - dirty_before
+                    ):
+                        raise RuntimeError(
+                            self._describe_task_failure_with_repository_changes(
+                                result,
+                                task_index,
+                                head_before,
+                                dirty_before,
+                            )
+                        )
+                    raise RuntimeError(describe_failure("gigacode task session", result))
+                self.log.diagnostic(
+                    "session=task event=failure_recovered "
+                    f"task_index={task_index} reason=committed_task_completion"
+                )
             if result.signal == TASK_FAILED:
+                if task_index is not None:
+                    self._restore_plan_snapshot(
+                        plan_before,
+                        task_index,
+                        reason="task_failed",
+                    )
                 raise RuntimeError("task failed")
             if task_index is not None:
                 self._validate_completed_task_iteration(task_index, head_before, dirty_before)
@@ -234,6 +280,103 @@ class Runner:
             raise RuntimeError(f"task iteration {task_index} completed without creating a commit")
         if self._uncommitted_paths() - dirty_before:
             raise RuntimeError(f"task iteration {task_index} left new uncommitted changes in the working tree")
+
+    def _prepare_task_retry(
+        self,
+        task_index: int,
+        plan_before: str,
+        head_before: str,
+        dirty_before: set[Path],
+    ) -> bool:
+        if self._task_iteration_completed_cleanly(
+            task_index,
+            head_before,
+            dirty_before,
+        ):
+            self.log.diagnostic(
+                "session=task event=retry_guard_rejected "
+                f"task_index={task_index} reason=committed_task_completion"
+            )
+            return False
+
+        self._restore_plan_snapshot(
+            plan_before,
+            task_index,
+            reason="retry",
+        )
+        return True
+
+    def _restore_plan_snapshot(
+        self,
+        plan_before: str,
+        task_index: int,
+        *,
+        reason: str,
+    ) -> None:
+        assert self.options.plan_file is not None
+        current = (
+            self.options.plan_file.read_text(encoding="utf-8")
+            if self.options.plan_file.exists()
+            else None
+        )
+        if current == plan_before:
+            return
+        self.options.plan_file.parent.mkdir(parents=True, exist_ok=True)
+        self.options.plan_file.write_text(plan_before, encoding="utf-8")
+        self.log.diagnostic(
+            "session=task event=plan_snapshot_restored "
+            f"task_index={task_index} reason={reason}"
+        )
+
+    def _task_iteration_completed_cleanly(
+        self,
+        task_index: int,
+        head_before: str,
+        dirty_before: set[Path],
+    ) -> bool:
+        assert self.options.plan_file is not None
+        plan = parse_plan_file(self.options.plan_file)
+        task_complete = (
+            task_index <= len(plan.tasks)
+            and plan.tasks[task_index - 1].complete
+        )
+        return (
+            task_complete
+            and self._git().head_commit() != head_before
+            and not (self._uncommitted_paths() - dirty_before)
+        )
+
+    def _describe_task_failure_with_repository_changes(
+        self,
+        result: ExecResult,
+        task_index: int,
+        head_before: str,
+        dirty_before: set[Path],
+    ) -> str:
+        new_dirty = sorted(
+            str(path)
+            for path in self._uncommitted_paths() - dirty_before
+        )
+        head_changed = self._git().head_commit() != head_before
+        state = []
+        if head_changed:
+            state.append("HEAD changed")
+        if new_dirty:
+            state.append(f"new uncommitted paths: {', '.join(new_dirty)}")
+        if not state:
+            state.append("the selected task checklist changed without a clean committed completion")
+
+        continuation = (
+            "If the partial work is valid, inspect it and rerun the same plan"
+            + (" with --allow-dirty" if new_dirty else "")
+            + "; otherwise correct or remove only the unintended changes before rerunning."
+        )
+        return (
+            f"{describe_failure('gigacode task session', result)}; automatic retries were "
+            f"exhausted while task {task_index} still lacked a clean committed completion "
+            f"({'; '.join(state)}). Inspect `git status --short`, `git diff`, "
+            f"`git diff --cached`, and `git log -1 --oneline`. {continuation}"
+        )
 
     def _git(self) -> GitService:
         return GitService(Path("."))

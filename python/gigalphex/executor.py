@@ -68,6 +68,9 @@ class ExecResult:
         return APPROVAL_UNAVAILABLE_TEXT in self.output
 
 
+RetryGuard = Callable[[ExecResult], bool]
+
+
 class GigaCodeExecutor:
     def __init__(
         self,
@@ -101,8 +104,18 @@ class GigaCodeExecutor:
         self.diagnostic = diagnostic or (lambda _line: None)
         self.name = name
 
-    def run(self, prompt: str) -> ExecResult:
-        return self._run_with_retries(prompt, self.output, self.name)
+    def run(
+        self,
+        prompt: str,
+        *,
+        retry_guard: Optional[RetryGuard] = None,
+    ) -> ExecResult:
+        return self._run_with_retries(
+            prompt,
+            self.output,
+            self.name,
+            retry_guard=retry_guard,
+        )
 
     def run_interactive(self, prompt: str) -> ExecResult:
         session = self.name
@@ -184,6 +197,7 @@ class GigaCodeExecutor:
         prompt: str,
         output: Callable[[str], None],
         session: str,
+        retry_guard: Optional[RetryGuard] = None,
     ) -> ExecResult:
         attempts = self.retry_count + 1
         last: Optional[ExecResult] = None
@@ -206,6 +220,14 @@ class GigaCodeExecutor:
                 return result
             last = result
             if attempt < attempts:
+                if retry_guard is not None and not retry_guard(result):
+                    self._event(
+                        session,
+                        "retry_stopped",
+                        attempt=attempt,
+                        reason="retry_guard_rejected",
+                    )
+                    return result
                 delay = self._retry_delay(result)
                 self._event(
                     session,
@@ -454,7 +476,12 @@ class DryRunExecutor:
         self.output = output or (lambda line: sys.stdout.write(line))
         self.prompts: list[str] = []
 
-    def run(self, prompt: str) -> ExecResult:
+    def run(
+        self,
+        prompt: str,
+        *,
+        retry_guard: Optional[RetryGuard] = None,
+    ) -> ExecResult:
         self.prompts.append(prompt)
         self.output("--- DRY RUN PROMPT ---\n")
         self.output(prompt)

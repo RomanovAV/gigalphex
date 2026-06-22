@@ -347,6 +347,58 @@ print("ok")
             self.assertEqual(2, result.attempts)
             self.assertIn("ok", result.output)
 
+    def test_retry_guard_can_stop_retry_when_caller_rejects_it(self) -> None:
+        diagnostics: list[str] = []
+        executor = GigaCodeExecutor(
+            retry_count=2,
+            retry_delay=0,
+            output=lambda _line: None,
+            diagnostic=diagnostics.append,
+            name="task",
+        )
+        failure = ExecResult(
+            output="timed out after committing\n",
+            returncode=-9,
+            idle_timed_out=True,
+        )
+
+        with patch.object(executor, "_run_once", return_value=failure) as run_once:
+            result = executor.run(
+                "prompt",
+                retry_guard=lambda _result: False,
+            )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(1, result.attempts)
+        run_once.assert_called_once()
+        self.assertIn(
+            "event=retry_stopped attempt=1 reason=retry_guard_rejected",
+            "\n".join(diagnostics),
+        )
+
+    def test_retry_guard_allows_retry_when_state_is_unchanged(self) -> None:
+        executor = GigaCodeExecutor(
+            retry_count=1,
+            retry_delay=0,
+            output=lambda _line: None,
+        )
+        failure = ExecResult(output="temporary failure\n", returncode=7)
+        success = ExecResult(output="ok\n", returncode=0)
+
+        with patch.object(
+            executor,
+            "_run_once",
+            side_effect=[failure, success],
+        ) as run_once:
+            result = executor.run(
+                "prompt",
+                retry_guard=lambda _result: True,
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(2, result.attempts)
+        self.assertEqual(2, run_once.call_count)
+
     def test_marks_transient_retry_pattern_on_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             script = write_script(
