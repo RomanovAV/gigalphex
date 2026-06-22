@@ -226,7 +226,8 @@ Review behavior:
   by the same synthesis stage
 - limit fan-out with `--review-workers N`
 - kill stuck sessions with `--session-timeout SECONDS`
-- kill silent sessions with `--idle-timeout SECONDS`
+- kill silent sessions with `--idle-timeout SECONDS`; any stdout bytes reset
+  the timer even when the process has not emitted a complete line
 - retry failed sessions with `--retry-count N --retry-delay SECONDS`
 - before retrying an incomplete task, GigaLphex restores the plan snapshot from
   the start of that iteration so the retry selects the same task; partial code

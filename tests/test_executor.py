@@ -504,6 +504,31 @@ time.sleep(5)
             self.assertFalse(result.ok)
             self.assertIn("working", result.output)
 
+    def test_idle_timeout_resets_on_bytes_without_newline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "streaming_without_newline.py",
+                """#!/usr/bin/env python3
+import sys
+import time
+for _ in range(5):
+    sys.stdout.write(".")
+    sys.stdout.flush()
+    time.sleep(0.15)
+""",
+            )
+
+            result = GigaCodeExecutor(
+                command=str(script),
+                timeout=3,
+                idle_timeout=0.3,
+                output=lambda _chunk: None,
+            ).run("prompt")
+
+            self.assertTrue(result.ok)
+            self.assertFalse(result.idle_timed_out)
+            self.assertEqual(".....\n", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

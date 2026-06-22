@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import shlex
@@ -293,9 +296,6 @@ class GigaCodeExecutor:
                 stdin=subprocess.PIPE if pipe_stdin else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
             )
         except FileNotFoundError as exc:
             self._event(session, "launch_failed", error="command_not_found")
@@ -305,11 +305,13 @@ class GigaCodeExecutor:
         assert proc.stdout is not None
         if pipe_stdin:
             assert proc.stdin is not None
-            proc.stdin.write(stdin_prompt)
+            proc.stdin.write(stdin_prompt.encode("utf-8"))
             proc.stdin.close()
             self._event(session, "stdin_sent", chars=len(stdin_prompt))
 
         chunks: list[str] = []
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        approval_scan_tail = ""
         timed_out = False
         idle_timed_out = False
         first_output_seen = False
@@ -348,7 +350,7 @@ class GigaCodeExecutor:
             timer.start()
         reset_idle_timer()
         try:
-            for line in proc.stdout:
+            for raw_chunk in _read_output_chunks(proc.stdout):
                 reset_idle_timer()
                 if not first_output_seen:
                     first_output_seen = True
@@ -357,11 +359,23 @@ class GigaCodeExecutor:
                         "first_output",
                         elapsed_ms=_elapsed_ms(started),
                     )
-                chunks.append(line)
-                output(line)
-                if APPROVAL_UNAVAILABLE_TEXT in line:
+                chunk = (
+                    raw_chunk
+                    if isinstance(raw_chunk, str)
+                    else decoder.decode(raw_chunk)
+                )
+                if chunk:
+                    chunks.append(chunk)
+                    output(chunk)
+                approval_scan = approval_scan_tail + chunk
+                approval_scan_tail = approval_scan[-len(APPROVAL_UNAVAILABLE_TEXT):]
+                if APPROVAL_UNAVAILABLE_TEXT in approval_scan:
                     self._event(session, "approval_warning_detected")
                     kill_process("approval_unavailable")
+            final_chunk = decoder.decode(b"", final=True)
+            if final_chunk:
+                chunks.append(final_chunk)
+                output(final_chunk)
             returncode = proc.wait()
         except KeyboardInterrupt:
             self._event(session, "interrupted")
@@ -444,6 +458,19 @@ class GigaCodeExecutor:
 def matches_any(text: str, patterns: list[str]) -> bool:
     lowered = text.lower()
     return any(pattern and pattern.lower() in lowered for pattern in patterns)
+
+
+def _read_output_chunks(
+    stream: io.BufferedReader,
+):
+    if isinstance(stream, io.BufferedReader):
+        file_descriptor = stream.fileno()
+        while chunk := os.read(file_descriptor, 4096):
+            yield chunk
+        return
+
+    # Test doubles and unusual stream wrappers may only support iteration.
+    yield from stream
 
 
 def _elapsed_ms(started: float) -> int:
