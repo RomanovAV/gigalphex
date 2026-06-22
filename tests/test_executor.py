@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.executor import ExecResult, GigaCodeExecutor
+from gigalphex.stats import RunStatistics
 
 
 def write_script(path: Path, body: str) -> Path:
@@ -40,6 +41,8 @@ class ExecutorTest(unittest.TestCase):
                 "--approval-mode=auto-edit",
                 "--allowed-tools",
                 "run_shell_command",
+                "--output-format",
+                "stream-json",
                 "-p",
                 "prompt body",
             ],
@@ -52,7 +55,8 @@ class ExecutorTest(unittest.TestCase):
 
         self.assertEqual(
             "gigacode --approval-mode=auto-edit "
-            "--allowed-tools run_shell_command -p '<prompt>'",
+            "--allowed-tools run_shell_command "
+            "--output-format stream-json -p '<prompt>'",
             executor.command_line(),
         )
 
@@ -152,12 +156,18 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["--debug", "-p", "prompt body"], captured["argv"])
+            self.assertEqual(
+                ["--debug", "--output-format", "stream-json", "-p", "prompt body"],
+                captured["argv"],
+            )
 
     def test_command_line_shows_appended_prompt_option(self) -> None:
         executor = GigaCodeExecutor(command="gigacode", args=["--debug"])
 
-        self.assertEqual("gigacode --debug -p '<prompt>'", executor.command_line())
+        self.assertEqual(
+            "gigacode --debug --output-format stream-json -p '<prompt>'",
+            executor.command_line(),
+        )
 
     def test_legacy_prompt_flag_can_embed_prompt_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -181,7 +191,10 @@ print("ok")
             captured = json.loads(output_file.read_text(encoding="utf-8"))
 
             self.assertTrue(result.ok)
-            self.assertEqual(["--prompt=prompt body"], captured["argv"])
+            self.assertEqual(
+                ["--output-format", "stream-json", "--prompt=prompt body"],
+                captured["argv"],
+            )
 
     def test_interactive_run_passes_initial_prompt_as_argument(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,6 +244,68 @@ sys.stdout.write("no newline")
             self.assertTrue(result.ok)
             self.assertEqual("no newline\n", result.output)
             self.assertEqual(["no newline", "\n"], chunks)
+
+    def test_stream_json_extracts_text_usage_and_timings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "stream_json.py",
+                """#!/usr/bin/env python3
+import json
+print(json.dumps({
+    "type": "system",
+    "subtype": "init",
+    "session_id": "session-1",
+    "model": "CodeChat"
+}))
+print(json.dumps({
+    "type": "assistant",
+    "session_id": "session-1",
+    "message": {
+        "model": "vllm/Test",
+        "content": [{"type": "text", "text": "intermediate progress"}],
+        "usage": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}
+    }
+}))
+print(json.dumps({
+    "type": "result",
+    "subtype": "success",
+    "session_id": "session-1",
+    "duration_ms": 1400,
+    "duration_api_ms": 1100,
+    "result": "DONE",
+    "usage": {
+        "input_tokens": 10,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 3,
+        "total_tokens": 12
+    },
+    "stats": {"models": {"vllm/Test": {}}}
+}))
+""",
+            )
+            statistics = RunStatistics()
+            visible: list[str] = []
+
+            result = GigaCodeExecutor(
+                command=str(script),
+                output=visible.append,
+                statistics=statistics,
+                name="task",
+            ).run("prompt")
+
+            self.assertTrue(result.ok)
+            self.assertEqual("DONE\n", result.output)
+            self.assertIn("intermediate progress\n", visible)
+            self.assertEqual("session-1", result.session_id)
+            self.assertEqual(("vllm/Test",), result.models)
+            self.assertEqual(10, result.usage.input_tokens)
+            self.assertEqual(2, result.usage.output_tokens)
+            self.assertEqual(3, result.usage.cache_read_input_tokens)
+            self.assertEqual(12, result.usage.total_tokens)
+            self.assertEqual(1400, result.reported_duration_ms)
+            self.assertEqual(1100, result.api_duration_ms)
+            self.assertEqual(1, len(statistics.invocations))
+            self.assertEqual("task", statistics.invocations[0].session)
 
     def test_detects_noninteractive_approval_warning(self) -> None:
         result = ExecResult(
@@ -398,6 +473,28 @@ print("ok")
         self.assertTrue(result.ok)
         self.assertEqual(2, result.attempts)
         self.assertEqual(2, run_once.call_count)
+
+    def test_statistics_record_every_retry_attempt(self) -> None:
+        statistics = RunStatistics()
+        executor = GigaCodeExecutor(
+            retry_count=1,
+            retry_delay=0,
+            output=lambda _line: None,
+            statistics=statistics,
+            name="task",
+        )
+        failure = ExecResult(output="temporary failure\n", returncode=7, wall_duration_ms=100)
+        success = ExecResult(output="ok\n", returncode=0, wall_duration_ms=200)
+
+        with patch.object(
+            executor,
+            "_run_once",
+            side_effect=[failure, success],
+        ):
+            executor.run("prompt")
+
+        self.assertEqual([1, 2], [item.attempt for item in statistics.invocations])
+        self.assertEqual([100, 200], [item.wall_duration_ms for item in statistics.invocations])
 
     def test_marks_transient_retry_pattern_on_failed_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -30,6 +30,10 @@ The default argument template is
 GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
 `-p <generated prompt>` instead of sending a non-interactive prompt through
 stdin.
+For the actual subprocess invocation GigaLphex also enforces
+`--output-format stream-json`. Assistant text is decoded back into the normal
+terminal/progress stream, while final `result` events provide exact token and
+timing statistics.
 Custom non-interactive arguments cannot disable shell execution accidentally:
 GigaLphex normalizes every plan, task, review, synthesis, and finalize invocation
 to include `--approval-mode=auto-edit` and allow `run_shell_command`.
@@ -90,9 +94,15 @@ Observed GigaCode constraints:
   terminal output, and the progress log.
 - Progress logs include executor lifecycle events for every phase: sanitized
   command, prompt transport and size, process start/PID, first output, timeout
-  or approval detection, exit status, and retry decisions. Prompt contents are
-  never included in these diagnostic lines. Parallel reviewers are identified
-  as `review-agent:<name>`.
+  or approval detection, exit status, token usage, and retry decisions. Prompt
+  contents are never included in these diagnostic lines. Parallel reviewers
+  are identified as `review-agent:<name>`.
+- Every plan/review run writes a statistics report next to the progress log,
+  for example `.gigalphex/progress/stats-my-feature.json`. It includes each
+  GigaCode attempt, measured wall time, GigaCode/API durations when reported,
+  model names, per-call tokens, aggregate tokens, total run wall time, and the
+  sum of call durations. Summed call time may exceed wall time because review
+  agents run in parallel.
 - GigaCode runs on Node.js, so Node warnings such as
   `MaxListenersExceededWarning` may appear in combined output.
 

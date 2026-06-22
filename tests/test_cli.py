@@ -1,6 +1,7 @@
 from pathlib import Path
 import contextlib
 import io
+import json
 import os
 import stat
 import subprocess
@@ -792,6 +793,85 @@ else:
             self.assertIn("docs: complete plan 20260612-smoke", latest)
             self.assertIn("docs/plans/completed/20260612-smoke.md", latest)
             self.assertEqual("", status)
+
+    def test_plan_run_writes_token_and_timing_statistics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import json
+print(json.dumps({
+    "type": "assistant",
+    "session_id": "session-1",
+    "message": {
+        "model": "vllm/Test",
+        "content": [{"type": "text", "text": "<<<GIGALPHEX:ALL_TASKS_DONE>>>"}]
+    }
+}))
+print(json.dumps({
+    "type": "result",
+    "subtype": "success",
+    "session_id": "session-1",
+    "duration_ms": 1250,
+    "duration_api_ms": 900,
+    "result": "<<<GIGALPHEX:ALL_TASKS_DONE>>>",
+    "usage": {
+        "input_tokens": 100,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 20,
+        "total_tokens": 105
+    },
+    "stats": {"models": {"vllm/Test": {}}}
+}))
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                plan = tmp_path / "docs/plans/20260612-smoke.md"
+                plan.parent.mkdir(parents=True)
+                plan.write_text(
+                    """# Plan: Smoke
+
+### Task 1: Already done
+- [x] Nothing left to do
+""",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            str(plan),
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                            "--tasks-only",
+                            "--no-branch",
+                            "--no-move-plan",
+                            "--allow-dirty",
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            stats_file = tmp_path / ".gigalphex/progress/stats-20260612-smoke.json"
+            stats = json.loads(stats_file.read_text(encoding="utf-8"))
+            self.assertEqual(0, code)
+            self.assertEqual(1, stats["call_count"])
+            self.assertEqual(105, stats["usage"]["total_tokens"])
+            self.assertEqual("task", stats["invocations"][0]["session"])
+            self.assertEqual(1250, stats["invocations"][0]["reported_duration_ms"])
+            self.assertIn("tokens: input=100 output=5", stdout.getvalue())
+            self.assertIn(f"statistics: {stats_file.relative_to(tmp_path)}", stdout.getvalue())
 
     def test_plan_run_can_use_isolated_worktree_branch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

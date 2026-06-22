@@ -20,6 +20,7 @@ from .progress import ProgressLog
 from .prompts import load_prompt_templates, render_make_plan, render_plan_skill
 from .runner import RunOptions, Runner
 from .skills import install_planning_skill, planning_skill_installed, planning_skill_path
+from .stats import RunStatistics, statistics_path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -457,6 +458,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     progress_base = plan_file.stem if plan_file else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
+    statistics = RunStatistics()
     task_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("task"),
@@ -471,6 +473,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         output=log.stream,
         diagnostic=log.diagnostic,
         name="task",
+        statistics=statistics,
     )
     synthesis_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -486,6 +489,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         output=log.stream,
         diagnostic=log.diagnostic,
         name="review-synthesis",
+        statistics=statistics,
     )
     review_agent_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -501,6 +505,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         output=log.stream,
         diagnostic=log.diagnostic,
         name="review-agent",
+        statistics=statistics,
     )
     finalize_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
@@ -516,6 +521,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         output=log.stream,
         diagnostic=log.diagnostic,
         name="finalize",
+        statistics=statistics,
     )
     if not args.dry_run:
         log.section("startup")
@@ -558,6 +564,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         prompts=prompts,
     )
 
+    exit_code = 0
     try:
         Runner(
             options,
@@ -583,10 +590,23 @@ def main(argv: Optional[list[str]] = None) -> int:
                 log.write(f"committed completed plan move: {message}\n")
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
-        return 130
+        exit_code = 130
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 1
+        exit_code = 1
+    finally:
+        if not args.dry_run:
+            statistics.finish()
+            report = statistics.render_text()
+            stats_file = statistics_path(progress_file)
+            statistics.write_json(stats_file)
+            log.section("run statistics")
+            log.write(report)
+            print(report, end="")
+            print(f"statistics: {stats_file}")
+
+    if exit_code:
+        return exit_code
     print(f"progress log: {progress_file}")
     return 0
 

@@ -16,6 +16,7 @@ from typing import Callable, Optional
 
 from .defaults import DEFAULT_GIGACODE_ARGS
 from .signals import detect_signal
+from .stats import InvocationStat, RunStatistics, TokenUsage
 
 
 APPROVAL_UNAVAILABLE_TEXT = (
@@ -54,6 +55,13 @@ class ExecResult:
     transient_error: bool = False
     rate_limited: bool = False
     attempts: int = 1
+    wall_duration_ms: int = 0
+    reported_duration_ms: Optional[int] = None
+    api_duration_ms: Optional[int] = None
+    session_id: str = ""
+    models: tuple[str, ...] = ()
+    usage: Optional[TokenUsage] = None
+    approval_denied: bool = False
 
     @property
     def ok(self) -> bool:
@@ -68,7 +76,7 @@ class ExecResult:
 
     @property
     def approval_unavailable(self) -> bool:
-        return APPROVAL_UNAVAILABLE_TEXT in self.output
+        return self.approval_denied or APPROVAL_UNAVAILABLE_TEXT in self.output
 
 
 RetryGuard = Callable[[ExecResult], bool]
@@ -90,6 +98,7 @@ class GigaCodeExecutor:
         output: Optional[Callable[[str], None]] = None,
         diagnostic: Optional[Callable[[str], None]] = None,
         name: str = "gigacode",
+        statistics: Optional[RunStatistics] = None,
     ) -> None:
         self.command = command
         self.args = args if args is not None else DEFAULT_GIGACODE_ARGS.copy()
@@ -106,6 +115,7 @@ class GigaCodeExecutor:
         self.output = output or (lambda line: print(line, end=""))
         self.diagnostic = diagnostic or (lambda _line: None)
         self.name = name
+        self.statistics = statistics
 
     def run(
         self,
@@ -190,7 +200,8 @@ class GigaCodeExecutor:
         return results
 
     def command_line(self) -> str:
-        safe_args = [arg.replace("{prompt}", "<prompt>") for arg in self.args]
+        transport_args = _with_stream_json_output(self.args)
+        safe_args = [arg.replace("{prompt}", "<prompt>") for arg in transport_args]
         if not any("{prompt}" in arg for arg in self.args):
             safe_args.extend(["-p", "<prompt>"])
         return shlex.join([self.command, *safe_args])
@@ -210,6 +221,7 @@ class GigaCodeExecutor:
                 output(f"retrying gigacode command, attempt {attempt}/{attempts}\n")
             result = self._run_once(prompt, output, session)
             result.attempts = attempt
+            self._record_statistics(session, attempt, result)
             if result.ok:
                 self._event(session, "attempt_succeeded", attempt=attempt)
                 return result
@@ -311,7 +323,9 @@ class GigaCodeExecutor:
 
         chunks: list[str] = []
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        stream_decoder = _StreamJsonDecoder()
         approval_scan_tail = ""
+        approval_denied = False
         timed_out = False
         idle_timed_out = False
         first_output_seen = False
@@ -365,17 +379,23 @@ class GigaCodeExecutor:
                     else decoder.decode(raw_chunk)
                 )
                 if chunk:
-                    chunks.append(chunk)
-                    output(chunk)
+                    for visible in stream_decoder.feed(chunk):
+                        chunks.append(visible)
+                        output(visible)
                 approval_scan = approval_scan_tail + chunk
                 approval_scan_tail = approval_scan[-len(APPROVAL_UNAVAILABLE_TEXT):]
                 if APPROVAL_UNAVAILABLE_TEXT in approval_scan:
+                    approval_denied = True
                     self._event(session, "approval_warning_detected")
                     kill_process("approval_unavailable")
             final_chunk = decoder.decode(b"", final=True)
             if final_chunk:
-                chunks.append(final_chunk)
-                output(final_chunk)
+                for visible in stream_decoder.feed(final_chunk):
+                    chunks.append(visible)
+                    output(visible)
+            for visible in stream_decoder.finish():
+                chunks.append(visible)
+                output(visible)
             returncode = proc.wait()
         except KeyboardInterrupt:
             self._event(session, "interrupted")
@@ -393,7 +413,13 @@ class GigaCodeExecutor:
             chunks.append("\n")
             output("\n")
 
-        text = "".join(chunks)
+        visible_text = "".join(chunks)
+        text = stream_decoder.result_output
+        if text is None:
+            text = visible_text
+        elif text and not text.endswith("\n"):
+            text += "\n"
+        wall_duration_ms = _elapsed_ms(started)
         failed = returncode != 0 or timed_out or idle_timed_out
         result = ExecResult(
             output=text,
@@ -403,13 +429,23 @@ class GigaCodeExecutor:
             idle_timed_out=idle_timed_out,
             transient_error=failed and matches_any(text, self.retry_patterns),
             rate_limited=failed and matches_any(text, self.rate_limit_patterns),
+            wall_duration_ms=wall_duration_ms,
+            reported_duration_ms=stream_decoder.reported_duration_ms,
+            api_duration_ms=stream_decoder.api_duration_ms,
+            session_id=stream_decoder.session_id,
+            models=stream_decoder.models,
+            usage=stream_decoder.usage,
+            approval_denied=approval_denied,
         )
         self._event(
             session,
             "finished",
             returncode=returncode,
-            duration_ms=_elapsed_ms(started),
+            duration_ms=wall_duration_ms,
             output_chars=len(text),
+            input_tokens=result.usage.input_tokens if result.usage else "unknown",
+            output_tokens=result.usage.output_tokens if result.usage else "unknown",
+            total_tokens=result.usage.total_tokens if result.usage else "unknown",
             signal=result.signal or "none",
             timed_out=timed_out,
             idle_timed_out=idle_timed_out,
@@ -418,6 +454,29 @@ class GigaCodeExecutor:
             approval_unavailable=result.approval_unavailable,
         )
         return result
+
+    def _record_statistics(
+        self,
+        session: str,
+        attempt: int,
+        result: ExecResult,
+    ) -> None:
+        if self.statistics is None:
+            return
+        self.statistics.add(
+            InvocationStat(
+                session=session,
+                attempt=attempt,
+                status=_result_status(result),
+                returncode=result.returncode,
+                wall_duration_ms=result.wall_duration_ms,
+                reported_duration_ms=result.reported_duration_ms,
+                api_duration_ms=result.api_duration_ms,
+                session_id=result.session_id,
+                models=result.models,
+                usage=result.usage,
+            )
+        )
 
     def _build_invocation(
         self,
@@ -437,6 +496,8 @@ class GigaCodeExecutor:
             if require_placeholder:
                 return [self.command, *args], prompt
             args.extend(["-p", prompt])
+        if not require_placeholder:
+            args = _with_stream_json_output(args)
         return [self.command, *args], ""
 
     def _safe_command(self, argv: list[str], prompt: str) -> str:
@@ -458,6 +519,157 @@ class GigaCodeExecutor:
 def matches_any(text: str, patterns: list[str]) -> bool:
     lowered = text.lower()
     return any(pattern and pattern.lower() in lowered for pattern in patterns)
+
+
+def _with_stream_json_output(args: list[str]) -> list[str]:
+    normalized: list[str] = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in {"-o", "--output-format"}:
+            index += 2 if index + 1 < len(args) else 1
+            continue
+        if arg.startswith("--output-format="):
+            index += 1
+            continue
+        normalized.append(arg)
+        index += 1
+
+    insertion_index = len(normalized)
+    for index, arg in enumerate(normalized):
+        if arg in {"-p", "--prompt"} or arg.startswith("--prompt="):
+            insertion_index = index
+            break
+    return [
+        *normalized[:insertion_index],
+        "--output-format",
+        "stream-json",
+        *normalized[insertion_index:],
+    ]
+
+
+class _StreamJsonDecoder:
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._assistant_text_seen = False
+        self.reported_duration_ms: Optional[int] = None
+        self.api_duration_ms: Optional[int] = None
+        self.session_id = ""
+        self.models: tuple[str, ...] = ()
+        self.usage: Optional[TokenUsage] = None
+        self.result_output: Optional[str] = None
+
+    def feed(self, text: str) -> list[str]:
+        self._buffer += text
+        visible: list[str] = []
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            visible.extend(self._process_line(line, terminated=True))
+        return visible
+
+    def finish(self) -> list[str]:
+        if not self._buffer:
+            return []
+        line = self._buffer
+        self._buffer = ""
+        return self._process_line(line, terminated=False)
+
+    def _process_line(self, line: str, *, terminated: bool) -> list[str]:
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            return [line + ("\n" if terminated else "")]
+        if not isinstance(event, dict):
+            return [line + ("\n" if terminated else "")]
+
+        event_type = event.get("type")
+        if event_type == "system":
+            self.session_id = _string_value(event.get("session_id")) or self.session_id
+            model = _string_value(event.get("model"))
+            if model and not self.models:
+                self.models = (model,)
+            return []
+        if event_type == "assistant":
+            self.session_id = _string_value(event.get("session_id")) or self.session_id
+            message = event.get("message")
+            if not isinstance(message, dict):
+                return []
+            model = _string_value(message.get("model"))
+            if model:
+                self.models = tuple(dict.fromkeys([*self.models, model]))
+            text = _assistant_text(message.get("content"))
+            if not text:
+                return []
+            self._assistant_text_seen = True
+            return [text if text.endswith("\n") else text + "\n"]
+        if event_type == "result":
+            self.session_id = _string_value(event.get("session_id")) or self.session_id
+            self.reported_duration_ms = _optional_int(event.get("duration_ms"))
+            self.api_duration_ms = _optional_int(event.get("duration_api_ms"))
+            self.usage = _parse_usage(event.get("usage"))
+            models = _models_from_stats(event.get("stats"))
+            if models:
+                self.models = models
+            result = _string_value(event.get("result"))
+            self.result_output = result
+            if result and not self._assistant_text_seen:
+                return [result if result.endswith("\n") else result + "\n"]
+            return []
+        return []
+
+
+def _assistant_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            text = item.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
+def _parse_usage(value: object) -> Optional[TokenUsage]:
+    if not isinstance(value, dict):
+        return None
+    input_tokens = _optional_int(value.get("input_tokens"))
+    output_tokens = _optional_int(value.get("output_tokens"))
+    cache_tokens = _optional_int(value.get("cache_read_input_tokens")) or 0
+    total_tokens = _optional_int(value.get("total_tokens"))
+    if input_tokens is None or output_tokens is None:
+        return None
+    return TokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_input_tokens=cache_tokens,
+        total_tokens=total_tokens if total_tokens is not None else input_tokens + output_tokens,
+    )
+
+
+def _models_from_stats(value: object) -> tuple[str, ...]:
+    if not isinstance(value, dict):
+        return ()
+    models = value.get("models")
+    if not isinstance(models, dict):
+        return ()
+    return tuple(str(name) for name in models)
+
+
+def _optional_int(value: object) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return round(value)
+    return None
+
+
+def _string_value(value: object) -> str:
+    return value if isinstance(value, str) else ""
 
 
 def _read_output_chunks(
@@ -489,6 +701,12 @@ def _failure_reason(result: ExecResult) -> str:
     if result.transient_error:
         return "transient_error"
     return f"exit_{result.returncode}"
+
+
+def _result_status(result: ExecResult) -> str:
+    if result.ok:
+        return "success"
+    return _failure_reason(result)
 
 
 def _diagnostic_value(value: object) -> str:
