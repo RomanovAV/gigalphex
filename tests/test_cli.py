@@ -255,11 +255,32 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             progress = (
                 tmp_path / ".gigalphex/progress/progress-20260612-smoke.txt"
             ).read_text(encoding="utf-8")
-            self.assertIn("session=task event=prepared", progress)
-            self.assertIn("session=task event=started", progress)
-            self.assertIn("session=task event=first_output", progress)
-            self.assertIn("session=task event=finished", progress)
-            self.assertIn("prompt_transport=argv", progress)
+            self.assertIn("plan already has no uncompleted task sections", progress)
+            self.assertNotIn("session=task event=prepared", progress)
+
+    def test_init_git_without_plan_only_initializes_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            project = tmp_path / "project"
+            project.mkdir()
+            original_cwd = Path.cwd()
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            try:
+                os.chdir(project)
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(
+                    stdout
+                ), contextlib.redirect_stderr(stderr):
+                    code = main(["--init-git"])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertTrue((project / ".git").is_dir())
+            self.assertIn("initialized git repository", stdout.getvalue())
+            self.assertNotIn("plan file is required", stderr.getvalue())
 
     def test_plan_execution_outside_git_repo_returns_actionable_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -803,12 +824,24 @@ else:
                 tmp_path / "fake_gigacode.py",
                 """#!/usr/bin/env python3
 import json
+from pathlib import Path
+import subprocess
+import sys
+
+prompt = "\\n".join(sys.argv[1:]) + sys.stdin.read()
+marker = "Phase: implement exactly one task section from "
+plan_line = next(line for line in prompt.splitlines() if line.startswith(marker))
+plan = Path(plan_line[len(marker):].rstrip("."))
+plan.write_text(plan.read_text().replace("- [ ]", "- [x]"))
+subprocess.run(["git", "add", str(plan)], check=True)
+subprocess.run(["git", "commit", "-m", "feat: complete task"], check=True)
+
 print(json.dumps({
     "type": "assistant",
     "session_id": "session-1",
     "message": {
         "model": "vllm/Test",
-        "content": [{"type": "text", "text": "<<<GIGALPHEX:ALL_TASKS_DONE>>>"}]
+        "content": [{"type": "text", "text": "implemented"}]
     }
 }))
 print(json.dumps({
@@ -817,7 +850,7 @@ print(json.dumps({
     "session_id": "session-1",
     "duration_ms": 1250,
     "duration_api_ms": 900,
-    "result": "<<<GIGALPHEX:ALL_TASKS_DONE>>>",
+    "result": "implemented",
     "usage": {
         "input_tokens": 100,
         "output_tokens": 5,
@@ -839,8 +872,8 @@ print(json.dumps({
                 plan.write_text(
                     """# Plan: Smoke
 
-### Task 1: Already done
-- [x] Nothing left to do
+### Task 1: Implement
+- [ ] Complete the task
 """,
                     encoding="utf-8",
                 )

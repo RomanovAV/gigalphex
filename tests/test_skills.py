@@ -20,6 +20,7 @@ class SkillsTest(unittest.TestCase):
         self.assertIn("name: planning", text)
         self.assertIn("Do not begin implementation.", text)
         self.assertIn("checkboxes only inside executable task sections", text)
+        self.assertIn("Keep task ownership mutually exclusive", text)
 
     def test_install_is_idempotent_for_bundled_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

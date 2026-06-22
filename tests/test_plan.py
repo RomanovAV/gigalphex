@@ -73,6 +73,34 @@ class PlanParserTest(unittest.TestCase):
         self.assertEqual(1, len(plan.tasks))
         self.assertEqual(1, plan.tasks[0].number)
 
+    def test_preserves_complete_task_section_text(self) -> None:
+        plan = parse_plan(
+            """# Plan: Demo
+
+### Task 7: Build parser
+Explain the approach.
+- [ ] Implement it
+```text
+example
+```
+
+### Task 8: Follow-up
+- [ ] Later work
+"""
+        )
+
+        self.assertEqual(
+            """### Task 7: Build parser
+Explain the approach.
+- [ ] Implement it
+```text
+example
+```""",
+            plan.tasks[0].section,
+        )
+        self.assertEqual(plan.tasks[0], plan.first_uncompleted_task())
+        self.assertEqual([plan.tasks[0]], plan.tasks_matching(7, "Build parser"))
+
 
 if __name__ == "__main__":
     unittest.main()

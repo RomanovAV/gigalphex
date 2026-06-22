@@ -116,6 +116,11 @@ Plan rules:
   `### Iteration N:`, `### Задача N:`, or `### Итерация N:`.
 - Put actionable checkboxes only inside executable task sections.
 - Keep each task independently committable and small enough for one agent run.
+- Keep task ownership mutually exclusive. A later task must not repeat
+  implementation, tests, or validation already included in an earlier task.
+- Put tests and validation in the same task as the behavior they verify. Use a
+  separate integration-test task only for a genuinely distinct integration
+  boundary that earlier tasks cannot validate.
 - Include tests for code behavior that is added or changed.
 - Use exact validation commands discovered from the repository.
 - Do not invent mandatory coverage percentages or irrelevant test work.

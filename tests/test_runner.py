@@ -92,6 +92,41 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(1, len(synthesis_executor.batch_prompts))
             self.assertEqual(1, len(synthesis_executor.single_prompts))
 
+    def test_parallel_review_logs_stderr_without_forwarding_it_to_synthesis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+
+            class StderrExecutor(FakeExecutor):
+                def run_batch(self, prompts):
+                    self.batch_prompts.append(prompts)
+                    return {
+                        name: ExecResult(
+                            output="NO FINDINGS\n",
+                            error_output=f"[WARN] {name}\n",
+                            returncode=0,
+                        )
+                        for name in prompts
+                    }
+
+            executor = StderrExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=True,
+                    finalize_enabled=False,
+                ),
+                executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+            )
+
+            runner.run()
+
+            progress = (tmp_path / "progress.txt").read_text(encoding="utf-8")
+            self.assertIn("[WARN] quality", progress)
+            self.assertNotIn("[WARN]", executor.single_prompts[0])
+
     def test_single_review_reports_findings_before_synthesis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -170,6 +205,247 @@ class RunnerTest(unittest.TestCase):
                 runner.run_review()
 
             self.assertEqual([], synthesis_executor.single_prompts)
+
+    def test_malformed_review_output_gets_one_format_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            outputs = iter(
+                [
+                    ExecResult(output="Review looks clean.\n", returncode=0),
+                    ExecResult(output="NO FINDINGS\n", returncode=0),
+                ]
+            )
+            prompts: list[str] = []
+
+            def review_call(prompt):
+                prompts.append(prompt)
+                return next(outputs)
+
+            review_executor = CallbackExecutor(review_call)
+            synthesis_executor = FakeExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=False,
+                    finalize_enabled=False,
+                ),
+                review_executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+                synthesis_executor=synthesis_executor,  # type: ignore[arg-type]
+                review_agent_executor=review_executor,  # type: ignore[arg-type]
+            )
+
+            runner.run_review()
+
+            self.assertEqual(2, len(prompts))
+            self.assertIn("<UNTRUSTED_INVALID_REVIEW_OUTPUT>", prompts[1])
+            self.assertEqual(1, len(synthesis_executor.single_prompts))
+
+    def test_second_malformed_review_output_uses_fallback_reviewer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            outputs = iter(
+                [
+                    ExecResult(output="Review looks clean.\n", returncode=0),
+                    ExecResult(output="Still malformed.\n", returncode=0),
+                    ExecResult(output="NO FINDINGS\n", returncode=0),
+                ]
+            )
+            prompts: list[str] = []
+
+            def review_call(prompt):
+                prompts.append(prompt)
+                return next(outputs)
+
+            review_executor = CallbackExecutor(review_call)
+            synthesis_executor = FakeExecutor()
+            runner = Runner(
+                RunOptions(
+                    plan_file=None,
+                    progress_file=tmp_path / "progress.txt",
+                    review_only=True,
+                    parallel_review=False,
+                    finalize_enabled=False,
+                ),
+                review_executor,  # type: ignore[arg-type]
+                ProgressLog(tmp_path / "progress.txt"),
+                synthesis_executor=synthesis_executor,  # type: ignore[arg-type]
+                review_agent_executor=review_executor,  # type: ignore[arg-type]
+            )
+
+            runner.run_review()
+
+            self.assertEqual(3, len(prompts))
+            self.assertIn("<UNTRUSTED_INVALID_REVIEW_OUTPUT>", prompts[1])
+            self.assertIn("You are the review agent.", prompts[2])
+            self.assertEqual(1, len(synthesis_executor.single_prompts))
+
+    def test_completed_plan_does_not_invoke_task_agent(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: complete plan")
+            calls = 0
+
+            def unexpected_call(_prompt):
+                nonlocal calls
+                calls += 1
+                return ExecResult(output="", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                CallbackExecutor(unexpected_call),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(0, calls)
+
+    def test_task_prompt_is_bound_to_selected_section(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                plan.read_text(encoding="utf-8")
+                + """
+
+### Task 2: Follow-up
+- [ ] Complete the follow-up
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: add follow-up")
+            prompts: list[str] = []
+
+            def complete_selected(prompt):
+                prompts.append(prompt)
+                content = plan.read_text(encoding="utf-8")
+                if len(prompts) == 1:
+                    self.assertIn("Selected task identity: 1: Implement", prompt)
+                    self.assertIn("- [ ] Complete the implementation", prompt)
+                    self.assertNotIn("- [ ] Complete the follow-up", prompt)
+                    content = content.replace(
+                        "- [ ] Complete the implementation",
+                        "- [x] Complete the implementation",
+                    )
+                else:
+                    self.assertIn("Selected task identity: 2: Follow-up", prompt)
+                    content = content.replace(
+                        "- [ ] Complete the follow-up",
+                        "- [x] Complete the follow-up",
+                    )
+                plan.write_text(content, encoding="utf-8")
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", f"feat: complete task {len(prompts)}")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    delay_seconds=0,
+                ),
+                CallbackExecutor(complete_selected),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(2, len(prompts))
+
+    def test_task_iteration_rejects_marking_later_section(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                plan.read_text(encoding="utf-8")
+                + """
+
+### Task 2: Follow-up
+- [ ] Complete the follow-up
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: add follow-up")
+
+            def complete_both(_prompt):
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete both tasks")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                CallbackExecutor(complete_both),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "marked a later plan section"):
+                runner.run_tasks()
+
+    def test_task_completion_is_identified_by_number_and_title(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                """# Plan: Demo
+
+### Task 1: Implement
+- [ ] Complete the implementation
+
+### Task 2: Already complete
+- [x] Preserve this completed task
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: add reordered plan")
+
+            def complete_and_reorder(_prompt):
+                plan.write_text(
+                    """# Plan: Demo
+
+### Task 2: Already complete
+- [x] Preserve this completed task
+
+### Task 1: Implement
+- [x] Complete the implementation
+""",
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete selected task")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                CallbackExecutor(complete_and_reorder),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
 
     def test_task_iteration_requires_a_commit(self) -> None:
         with temporary_repo() as (repo, plan):

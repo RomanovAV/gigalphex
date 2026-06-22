@@ -7,7 +7,7 @@ from typing import Optional
 
 from .executor import ExecResult, GigaCodeExecutor
 from .git import GitService
-from .plan import file_has_uncompleted_checkbox, parse_plan_file
+from .plan import Plan, Task, file_has_uncompleted_checkbox, parse_plan, parse_plan_file
 from .progress import ProgressLog
 from .prompts import (
     DEFAULT_PROMPTS,
@@ -16,11 +16,12 @@ from .prompts import (
     PromptTemplates,
     render,
     render_review_agent_prompt,
+    render_review_format_retry_prompt,
     render_review_prompt,
     render_review_synthesis_prompt,
     render_task_prompt,
 )
-from .review import ReviewOutputError
+from .review import ReviewOutputError, normalize_review_output
 from .signals import (
     ALL_TASKS_DONE,
     FINALIZE_DONE,
@@ -82,47 +83,58 @@ class Runner:
             raise ValueError("plan file is required for task execution")
         self._validate_plan_has_tasks()
         context = self._context()
-        prompt = render_task_prompt(self.options.prompts.task, context)
+        if not self._has_uncompleted_work():
+            self.log.section("tasks")
+            self.log.write("plan already has no uncompleted task sections\n")
+            return
 
         for iteration in range(1, self.options.max_iterations + 1):
-            task_index = parse_plan_file(self.options.plan_file).first_uncompleted_task_index()
+            selected_task = parse_plan_file(self.options.plan_file).first_uncompleted_task()
+            if selected_task is None:
+                return
             plan_before = self.options.plan_file.read_text(encoding="utf-8")
-            head_before = self._git().head_commit() if task_index is not None else ""
+            head_before = self._git().head_commit()
             dirty_before = self._uncommitted_paths()
-            self.log.section(f"task iteration {task_index or iteration}")
+            prompt = render_task_prompt(
+                self.options.prompts.task,
+                context,
+                selected_task.number,
+                selected_task.title,
+                selected_task.section,
+            )
+            task_label = self._task_label(selected_task)
+            self.log.section(f"task iteration {iteration}: {task_label}")
             result = self.executor.run(
                 prompt,
                 retry_guard=(
                     lambda _result: self._prepare_task_retry(
-                        task_index,
+                        selected_task,
                         plan_before,
                         head_before,
                         dirty_before,
                     )
-                    if task_index is not None
-                    else True
                 ),
             )
             if not result.ok:
-                if task_index is None or not self._task_iteration_completed_cleanly(
-                    task_index,
+                if not self._task_iteration_completed_cleanly(
+                    selected_task,
+                    plan_before,
                     head_before,
                     dirty_before,
                 ):
-                    if task_index is not None:
-                        self._restore_plan_snapshot(
-                            plan_before,
-                            task_index,
-                            reason="attempts_exhausted",
-                        )
-                    if task_index is not None and (
+                    self._restore_plan_snapshot(
+                        plan_before,
+                        selected_task,
+                        reason="attempts_exhausted",
+                    )
+                    if (
                         self._git().head_commit() != head_before
                         or self._uncommitted_paths() - dirty_before
                     ):
                         raise RuntimeError(
                             self._describe_task_failure_with_repository_changes(
                                 result,
-                                task_index,
+                                selected_task,
                                 head_before,
                                 dirty_before,
                             )
@@ -130,18 +142,21 @@ class Runner:
                     raise RuntimeError(describe_failure("gigacode task session", result))
                 self.log.diagnostic(
                     "session=task event=failure_recovered "
-                    f"task_index={task_index} reason=committed_task_completion"
+                    f"task={task_label!r} reason=committed_task_completion"
                 )
             if result.signal == TASK_FAILED:
-                if task_index is not None:
-                    self._restore_plan_snapshot(
-                        plan_before,
-                        task_index,
-                        reason="task_failed",
-                    )
+                self._restore_plan_snapshot(
+                    plan_before,
+                    selected_task,
+                    reason="task_failed",
+                )
                 raise RuntimeError("task failed")
-            if task_index is not None:
-                self._validate_completed_task_iteration(task_index, head_before, dirty_before)
+            self._validate_completed_task_iteration(
+                selected_task,
+                plan_before,
+                head_before,
+                dirty_before,
+            )
             if result.signal == ALL_TASKS_DONE and not self._has_uncompleted_work():
                 return
             if not self._has_uncompleted_work():
@@ -163,10 +178,15 @@ class Runner:
                 raise RuntimeError(describe_failure("gigacode review session", result))
             if result.signal == TASK_FAILED:
                 raise RuntimeError("review failed")
+            structured_output = self._structured_review_output(
+                "review",
+                result,
+                context,
+            )
 
             self.log.section("review synthesis")
             synthesis = self.synthesis_executor.run(
-                self._render_review_synthesis_prompt({"review": result.output}, context)
+                self._render_review_synthesis_prompt({"review": structured_output}, context)
             )
             if not synthesis.ok:
                 raise RuntimeError(describe_failure("gigacode review synthesis", synthesis))
@@ -191,9 +211,11 @@ class Runner:
                 result = results[name]
                 self.log.section(f"review agent: {name}")
                 self.log.write(result.output)
-                findings[name] = result.output
+                if result.error_output:
+                    self.log.write(result.error_output)
                 if not result.ok:
                     raise RuntimeError(describe_failure(f"gigacode review agent {name}", result))
+                findings[name] = self._structured_review_output(name, result, context)
 
             self.log.section("review synthesis")
             synthesis = self.synthesis_executor.run(
@@ -225,8 +247,24 @@ class Runner:
         context = self._context()
         if not self.options.review_only:
             self.log.section("task prompt")
-            self.log.stream(render_task_prompt(self.options.prompts.task, context))
-            self.log.stream("\n")
+            selected_task = (
+                parse_plan_file(self.options.plan_file).first_uncompleted_task()
+                if self.options.plan_file is not None
+                else None
+            )
+            if selected_task is None:
+                self.log.stream("plan has no uncompleted task sections\n")
+            else:
+                self.log.stream(
+                    render_task_prompt(
+                        self.options.prompts.task,
+                        context,
+                        selected_task.number,
+                        selected_task.title,
+                        selected_task.section,
+                    )
+                )
+                self.log.stream("\n")
         if not self.options.tasks_only:
             self.log.section("review prompt")
             if self.options.parallel_review:
@@ -266,42 +304,52 @@ class Runner:
 
     def _validate_completed_task_iteration(
         self,
-        task_index: int,
+        selected_task: Task,
+        plan_before: str,
         head_before: str,
         dirty_before: set[Path],
     ) -> None:
         assert self.options.plan_file is not None
         plan = parse_plan_file(self.options.plan_file)
-        if task_index > len(plan.tasks) or not plan.tasks[task_index - 1].complete:
-            raise RuntimeError(f"task iteration {task_index} did not complete its selected plan section")
+        completed_task = self._matching_task(plan, selected_task)
+        if completed_task is None or not completed_task.complete:
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} did not complete its selected plan section"
+            )
+        self._validate_later_tasks_unchanged(selected_task, plan_before, plan)
 
         git = self._git()
         if git.head_commit() == head_before:
-            raise RuntimeError(f"task iteration {task_index} completed without creating a commit")
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} completed without creating a commit"
+            )
         if self._uncommitted_paths() - dirty_before:
-            raise RuntimeError(f"task iteration {task_index} left new uncommitted changes in the working tree")
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} left new uncommitted changes in the working tree"
+            )
 
     def _prepare_task_retry(
         self,
-        task_index: int,
+        selected_task: Task,
         plan_before: str,
         head_before: str,
         dirty_before: set[Path],
     ) -> bool:
         if self._task_iteration_completed_cleanly(
-            task_index,
+            selected_task,
+            plan_before,
             head_before,
             dirty_before,
         ):
             self.log.diagnostic(
                 "session=task event=retry_guard_rejected "
-                f"task_index={task_index} reason=committed_task_completion"
+                f"task={self._task_label(selected_task)!r} reason=committed_task_completion"
             )
             return False
 
         self._restore_plan_snapshot(
             plan_before,
-            task_index,
+            selected_task,
             reason="retry",
         )
         return True
@@ -309,7 +357,7 @@ class Runner:
     def _restore_plan_snapshot(
         self,
         plan_before: str,
-        task_index: int,
+        selected_task: Task,
         *,
         reason: str,
     ) -> None:
@@ -325,23 +373,28 @@ class Runner:
         self.options.plan_file.write_text(plan_before, encoding="utf-8")
         self.log.diagnostic(
             "session=task event=plan_snapshot_restored "
-            f"task_index={task_index} reason={reason}"
+            f"task={self._task_label(selected_task)!r} reason={reason}"
         )
 
     def _task_iteration_completed_cleanly(
         self,
-        task_index: int,
+        selected_task: Task,
+        plan_before: str,
         head_before: str,
         dirty_before: set[Path],
     ) -> bool:
         assert self.options.plan_file is not None
         plan = parse_plan_file(self.options.plan_file)
-        task_complete = (
-            task_index <= len(plan.tasks)
-            and plan.tasks[task_index - 1].complete
+        completed_task = self._matching_task(plan, selected_task)
+        task_complete = completed_task is not None and completed_task.complete
+        later_tasks_unchanged = self._later_tasks_unchanged(
+            selected_task,
+            plan_before,
+            plan,
         )
         return (
             task_complete
+            and later_tasks_unchanged
             and self._git().head_commit() != head_before
             and not (self._uncommitted_paths() - dirty_before)
         )
@@ -349,7 +402,7 @@ class Runner:
     def _describe_task_failure_with_repository_changes(
         self,
         result: ExecResult,
-        task_index: int,
+        selected_task: Task,
         head_before: str,
         dirty_before: set[Path],
     ) -> str:
@@ -373,10 +426,105 @@ class Runner:
         )
         return (
             f"{describe_failure('gigacode task session', result)}; automatic retries were "
-            f"exhausted while task {task_index} still lacked a clean committed completion "
+            f"exhausted while task {self._task_label(selected_task)} still lacked a clean committed completion "
             f"({'; '.join(state)}). Inspect `git status --short`, `git diff`, "
             f"`git diff --cached`, and `git log -1 --oneline`. {continuation}"
         )
+
+    def _matching_task(self, plan: Plan, selected_task: Task) -> Optional[Task]:
+        matches = plan.tasks_matching(selected_task.number, selected_task.title)
+        return matches[0] if len(matches) == 1 else None
+
+    def _validate_later_tasks_unchanged(
+        self,
+        selected_task: Task,
+        plan_before: str,
+        plan_after: Plan,
+    ) -> None:
+        if not self._later_tasks_unchanged(selected_task, plan_before, plan_after):
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} modified or marked a later plan section"
+            )
+
+    def _later_tasks_unchanged(
+        self,
+        selected_task: Task,
+        plan_before: str,
+        plan_after: Plan,
+    ) -> bool:
+        before = parse_plan(plan_before)
+        selected_matches = [
+            index
+            for index, task in enumerate(before.tasks)
+            if task.number == selected_task.number and task.title == selected_task.title
+        ]
+        if len(selected_matches) != 1:
+            return False
+
+        for later_task in before.tasks[selected_matches[0] + 1:]:
+            after_task = self._matching_task(plan_after, later_task)
+            if after_task is None:
+                return False
+            before_checkboxes = [
+                (checkbox.text, checkbox.checked)
+                for checkbox in later_task.checkboxes
+            ]
+            after_checkboxes = [
+                (checkbox.text, checkbox.checked)
+                for checkbox in after_task.checkboxes
+            ]
+            if after_checkboxes != before_checkboxes:
+                return False
+        return True
+
+    @staticmethod
+    def _task_label(task: Task) -> str:
+        return f"{task.number}: {task.title}"
+
+    def _structured_review_output(
+        self,
+        name: str,
+        result: ExecResult,
+        context: PromptContext,
+    ) -> str:
+        try:
+            return normalize_review_output(result.output)
+        except ReviewOutputError as first_error:
+            self.log.diagnostic(
+                "session=review event=invalid_output "
+                f"agent={name} action=format_retry error={str(first_error)!r}"
+            )
+
+        self.log.section(f"review format retry: {name}")
+        retry = self.review_agent_executor.run(
+            render_review_format_retry_prompt(result.output)
+        )
+        if retry.ok:
+            try:
+                return normalize_review_output(retry.output)
+            except ReviewOutputError as retry_error:
+                self.log.diagnostic(
+                    "session=review event=invalid_output "
+                    f"agent={name} action=fallback error={str(retry_error)!r}"
+                )
+        else:
+            self.log.diagnostic(
+                "session=review event=format_retry_failed "
+                f"agent={name} reason={describe_failure('review format retry', retry)!r}"
+            )
+
+        self.log.section(f"fallback reviewer: {name}")
+        fallback = self.review_agent_executor.run(
+            render_review_prompt(self.options.prompts.review, context)
+        )
+        if not fallback.ok:
+            raise RuntimeError(describe_failure("gigacode fallback reviewer", fallback))
+        try:
+            return normalize_review_output(fallback.output)
+        except ReviewOutputError as fallback_error:
+            raise RuntimeError(
+                f"invalid structured review output from fallback reviewer: {fallback_error}"
+            ) from fallback_error
 
     def _git(self) -> GitService:
         return GitService(Path("."))

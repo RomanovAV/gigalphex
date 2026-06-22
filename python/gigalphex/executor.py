@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import queue
 import subprocess
 import shlex
 import sys
@@ -48,6 +49,7 @@ DEFAULT_RATE_LIMIT_PATTERNS = [
 @dataclass
 class ExecResult:
     output: str
+    error_output: str = ""
     signal: str = ""
     returncode: int = 0
     timed_out: bool = False
@@ -76,7 +78,11 @@ class ExecResult:
 
     @property
     def approval_unavailable(self) -> bool:
-        return self.approval_denied or APPROVAL_UNAVAILABLE_TEXT in self.output
+        return (
+            self.approval_denied
+            or APPROVAL_UNAVAILABLE_TEXT in self.output
+            or APPROVAL_UNAVAILABLE_TEXT in self.error_output
+        )
 
 
 RetryGuard = Callable[[ExecResult], bool]
@@ -307,7 +313,7 @@ class GigaCodeExecutor:
                 argv,
                 stdin=subprocess.PIPE if pipe_stdin else None,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
             )
         except FileNotFoundError as exc:
             self._event(session, "launch_failed", error="command_not_found")
@@ -315,6 +321,7 @@ class GigaCodeExecutor:
 
         self._event(session, "started", pid=getattr(proc, "pid", "unknown"))
         assert proc.stdout is not None
+        assert proc.stderr is not None
         if pipe_stdin:
             assert proc.stdin is not None
             proc.stdin.write(stdin_prompt.encode("utf-8"))
@@ -322,9 +329,11 @@ class GigaCodeExecutor:
             self._event(session, "stdin_sent", chars=len(stdin_prompt))
 
         chunks: list[str] = []
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        stderr_chunks: list[str] = []
+        stdout_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         stream_decoder = _StreamJsonDecoder()
-        approval_scan_tail = ""
+        approval_scan_tails = {"stdout": "", "stderr": ""}
         approval_denied = False
         timed_out = False
         idle_timed_out = False
@@ -347,14 +356,23 @@ class GigaCodeExecutor:
 
         timer: Optional[threading.Timer] = None
         idle_timer: Optional[threading.Timer] = None
+        idle_generation = 0
 
-        def reset_idle_timer() -> None:
-            nonlocal idle_timer
+        def reset_idle_timer(*, startup: bool = False) -> None:
+            nonlocal idle_generation, idle_timer
             if self.idle_timeout is None or self.idle_timeout <= 0:
                 return
+            idle_generation += 1
+            generation = idle_generation
             if idle_timer is not None:
                 idle_timer.cancel()
-            idle_timer = threading.Timer(self.idle_timeout, kill_on_idle_timeout)
+            delay = max(self.idle_timeout, 1.0) if startup else self.idle_timeout
+
+            def kill_if_current() -> None:
+                if generation == idle_generation:
+                    kill_on_idle_timeout()
+
+            idle_timer = threading.Timer(delay, kill_if_current)
             idle_timer.daemon = True
             idle_timer.start()
 
@@ -362,9 +380,38 @@ class GigaCodeExecutor:
             timer = threading.Timer(self.timeout, kill_on_timeout)
             timer.daemon = True
             timer.start()
-        reset_idle_timer()
         try:
-            for raw_chunk in _read_output_chunks(proc.stdout):
+            stream_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+
+            def read_stream(name: str, stream: io.BufferedReader) -> None:
+                try:
+                    for raw_chunk in _read_output_chunks(stream):
+                        stream_queue.put((name, raw_chunk))
+                finally:
+                    stream_queue.put((name, None))
+
+            readers = [
+                threading.Thread(
+                    target=read_stream,
+                    args=("stdout", proc.stdout),
+                    daemon=True,
+                ),
+                threading.Thread(
+                    target=read_stream,
+                    args=("stderr", proc.stderr),
+                    daemon=True,
+                ),
+            ]
+            for reader in readers:
+                reader.start()
+            reset_idle_timer(startup=True)
+
+            completed_streams = 0
+            while completed_streams < len(readers):
+                source, raw_chunk = stream_queue.get()
+                if raw_chunk is None:
+                    completed_streams += 1
+                    continue
                 reset_idle_timer()
                 if not first_output_seen:
                     first_output_seen = True
@@ -373,26 +420,31 @@ class GigaCodeExecutor:
                         "first_output",
                         elapsed_ms=_elapsed_ms(started),
                     )
-                chunk = (
-                    raw_chunk
-                    if isinstance(raw_chunk, str)
-                    else decoder.decode(raw_chunk)
-                )
-                if chunk:
+                decoder = stdout_decoder if source == "stdout" else stderr_decoder
+                chunk = raw_chunk if isinstance(raw_chunk, str) else decoder.decode(raw_chunk)
+                if source == "stdout" and chunk:
                     for visible in stream_decoder.feed(chunk):
                         chunks.append(visible)
                         output(visible)
-                approval_scan = approval_scan_tail + chunk
-                approval_scan_tail = approval_scan[-len(APPROVAL_UNAVAILABLE_TEXT):]
+                elif chunk:
+                    stderr_chunks.append(chunk)
+                    output(chunk)
+                approval_scan = approval_scan_tails[source] + chunk
+                approval_scan_tails[source] = approval_scan[-len(APPROVAL_UNAVAILABLE_TEXT):]
                 if APPROVAL_UNAVAILABLE_TEXT in approval_scan:
                     approval_denied = True
                     self._event(session, "approval_warning_detected")
                     kill_process("approval_unavailable")
-            final_chunk = decoder.decode(b"", final=True)
-            if final_chunk:
-                for visible in stream_decoder.feed(final_chunk):
+
+            final_stdout = stdout_decoder.decode(b"", final=True)
+            if final_stdout:
+                for visible in stream_decoder.feed(final_stdout):
                     chunks.append(visible)
                     output(visible)
+            final_stderr = stderr_decoder.decode(b"", final=True)
+            if final_stderr:
+                stderr_chunks.append(final_stderr)
+                output(final_stderr)
             for visible in stream_decoder.finish():
                 chunks.append(visible)
                 output(visible)
@@ -408,6 +460,7 @@ class GigaCodeExecutor:
             if idle_timer is not None:
                 idle_timer.cancel()
             proc.stdout.close()
+            proc.stderr.close()
 
         if chunks and not chunks[-1].endswith("\n"):
             chunks.append("\n")
@@ -419,16 +472,19 @@ class GigaCodeExecutor:
             text = visible_text
         elif text and not text.endswith("\n"):
             text += "\n"
+        error_text = "".join(stderr_chunks)
         wall_duration_ms = _elapsed_ms(started)
         failed = returncode != 0 or timed_out or idle_timed_out
+        failure_text = f"{text}\n{error_text}"
         result = ExecResult(
             output=text,
+            error_output=error_text,
             signal=detect_signal(text),
             returncode=returncode,
             timed_out=timed_out,
             idle_timed_out=idle_timed_out,
-            transient_error=failed and matches_any(text, self.retry_patterns),
-            rate_limited=failed and matches_any(text, self.rate_limit_patterns),
+            transient_error=failed and matches_any(failure_text, self.retry_patterns),
+            rate_limited=failed and matches_any(failure_text, self.rate_limit_patterns),
             wall_duration_ms=wall_duration_ms,
             reported_duration_ms=stream_decoder.reported_duration_ms,
             api_duration_ms=stream_decoder.api_duration_ms,
@@ -443,6 +499,7 @@ class GigaCodeExecutor:
             returncode=returncode,
             duration_ms=wall_duration_ms,
             output_chars=len(text),
+            stderr_chars=len(error_text),
             input_tokens=result.usage.input_tokens if result.usage else "unknown",
             output_tokens=result.usage.output_tokens if result.usage else "unknown",
             total_tokens=result.usage.total_tokens if result.usage else "unknown",

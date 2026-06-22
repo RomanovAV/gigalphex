@@ -245,6 +245,28 @@ sys.stdout.write("no newline")
             self.assertEqual("no newline\n", result.output)
             self.assertEqual(["no newline", "\n"], chunks)
 
+    def test_stderr_is_streamed_but_excluded_from_structured_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = write_script(
+                Path(tmp) / "separate_streams.py",
+                """#!/usr/bin/env python3
+import sys
+print("[WARN] diagnostic", file=sys.stderr)
+print("NO FINDINGS")
+""",
+            )
+            visible: list[str] = []
+
+            result = GigaCodeExecutor(
+                command=str(script),
+                output=visible.append,
+            ).run("prompt")
+
+            self.assertTrue(result.ok)
+            self.assertEqual("NO FINDINGS\n", result.output)
+            self.assertEqual("[WARN] diagnostic\n", result.error_output)
+            self.assertIn("[WARN] diagnostic\n", visible)
+
     def test_stream_json_extracts_text_usage_and_timings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             script = write_script(

@@ -256,6 +256,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("initialized git repository")
         if not git.has_commits() and git.commit_all_if_dirty("chore: initialize repository"):
             print("committed initial repository state")
+    if (
+        args.init_git
+        and not args.plan
+        and not args.plan_file
+        and not args.review
+        and not args.install_planning_skill
+    ):
+        return 0
 
     cfg = load_config(args.config)
     prompts = load_prompt_templates(cfg.prompt_dirs)

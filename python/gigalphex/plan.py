@@ -32,6 +32,7 @@ class Task:
     number: int
     title: str
     checkboxes: list[Checkbox] = field(default_factory=list)
+    section: str = ""
 
     @property
     def complete(self) -> bool:
@@ -51,6 +52,17 @@ class Plan:
             if task.has_uncompleted_actionable_work():
                 return index
         return None
+
+    def first_uncompleted_task(self) -> Optional[Task]:
+        index = self.first_uncompleted_task_index()
+        return self.tasks[index - 1] if index is not None else None
+
+    def tasks_matching(self, number: int, title: str) -> list[Task]:
+        return [
+            task
+            for task in self.tasks
+            if task.number == number and task.title == title
+        ]
 
     def has_uncompleted_tasks(self) -> bool:
         return self.first_uncompleted_task_index() is not None
@@ -84,10 +96,13 @@ def parse_task_number(value: str) -> int:
 def parse_plan(content: str) -> Plan:
     plan = Plan()
     current: Optional[Task] = None
+    current_lines: list[str] = []
     fence = FenceTracker()
 
     for line in content.splitlines():
         if fence.skip(line):
+            if current is not None:
+                current_lines.append(line)
             continue
 
         if not plan.title:
@@ -99,18 +114,23 @@ def parse_plan(content: str) -> Plan:
         task_match = TASK_HEADER_RE.match(line)
         if task_match:
             if current is not None:
+                current.section = "\n".join(current_lines).rstrip()
                 plan.tasks.append(current)
             current = Task(number=parse_task_number(task_match.group(1)), title=task_match.group(2).strip())
+            current_lines = [line]
             continue
 
         is_h2 = line.startswith("##") and not line.startswith("###")
         is_h1_after_title = line.startswith("#") and plan.title and not line.startswith("##")
         if current is not None and (is_h2 or is_h1_after_title):
+            current.section = "\n".join(current_lines).rstrip()
             plan.tasks.append(current)
             current = None
+            current_lines = []
             continue
 
         if current is not None:
+            current_lines.append(line)
             checkbox_match = CHECKBOX_RE.match(line)
             if checkbox_match:
                 current.checkboxes.append(
@@ -121,6 +141,7 @@ def parse_plan(content: str) -> Plan:
                 )
 
     if current is not None:
+        current.section = "\n".join(current_lines).rstrip()
         plan.tasks.append(current)
     return plan
 
