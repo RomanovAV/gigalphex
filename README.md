@@ -269,9 +269,11 @@ Configuration loading priority, from lowest to highest:
 5. supported `GIGALPHEX_*` environment variables
 6. CLI arguments
 
-The global directory `~/.config/gigalphex/`, a commented
+The CLI creates the global directory `~/.config/gigalphex/`, a commented
 `~/.config/gigalphex/config` template, and all seven prompt templates under
-`~/.config/gigalphex/prompts/` are created automatically when the CLI starts.
+`~/.config/gigalphex/prompts/` automatically. If global files cannot be
+created, it creates `.gigalphex/config` and `.gigalphex/prompts/` in the
+current project instead.
 Existing global config files and customized prompts are never overwritten.
 Global prompts that still match an earlier installed default are upgraded to
 the current embedded default automatically.
@@ -293,7 +295,7 @@ Git behavior:
 Prompt customization:
 
 - global editable defaults are created automatically in
-  `~/.config/gigalphex/prompts/`
+  `~/.config/gigalphex/prompts/`, with local files used as a fallback
 - `--init-prompts` creates project-specific overrides in
   `.gigalphex/prompts/`
 - both directories use `make_plan.txt`, `plan_skill.txt`, `task.txt`, `review.txt`,

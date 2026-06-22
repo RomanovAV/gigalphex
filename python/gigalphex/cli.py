@@ -175,11 +175,24 @@ def find_interactively_created_plan(
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    local_fallback_written: list[Path] = []
+    local_fallback_started_clean = False
     try:
         init_global_config()
         init_global_prompt_templates()
-    except OSError as exc:
-        print(f"warning: could not initialize global gigalphex files: {exc}", file=sys.stderr)
+    except OSError:
+        try:
+            fallback_git = GitService(Path("."))
+            local_fallback_started_clean = (
+                fallback_git.is_repo() and not fallback_git.is_dirty()
+            )
+            local_fallback_written.extend(init_project_config())
+            local_fallback_written.extend(init_project_prompt_templates())
+        except OSError as exc:
+            print(
+                f"warning: could not initialize global or local gigalphex files: {exc}",
+                file=sys.stderr,
+            )
 
     args = build_parser().parse_args(argv)
     if args.force_skill_install and not args.install_planning_skill:
@@ -195,11 +208,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("error: --base-ref and --default-branch cannot be used together", file=sys.stderr)
         return 2
     if args.init or args.init_prompts:
-        written: list[Path] = []
+        written = local_fallback_written.copy()
         if args.init:
             written.extend(init_project_config())
         if args.init_prompts:
             written.extend(init_project_prompt_templates())
+        written = list(dict.fromkeys(written))
         if written:
             print("initialized gigalphex files:")
             for path in written:
@@ -222,13 +236,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("or use --quick for non-interactive plan creation", file=sys.stderr)
             return 2
 
-    auto_init_written: list[Path] = []
-    auto_init_started_clean = False
+    auto_init_written = local_fallback_written.copy()
+    auto_init_started_clean = local_fallback_started_clean
     if should_auto_init(args):
-        auto_init_git = GitService(Path("."))
-        auto_init_started_clean = auto_init_git.is_repo() and not auto_init_git.is_dirty()
-        auto_init_written = init_project_config()
-        if auto_init_written:
+        if not auto_init_written:
+            auto_init_git = GitService(Path("."))
+            auto_init_started_clean = auto_init_git.is_repo() and not auto_init_git.is_dirty()
+        project_config_written = init_project_config()
+        auto_init_written.extend(
+            path for path in project_config_written if path not in auto_init_written
+        )
+        if project_config_written:
             print(f"initialized local gigalphex config: {Path('.gigalphex/config')}")
 
     if args.init_git and not args.dry_run:

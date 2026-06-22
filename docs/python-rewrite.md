@@ -24,8 +24,9 @@
   `task_model`.
 - Initialize the local `.gigalphex/` config automatically on first real plan
   creation or execution.
-- Initialize editable global prompt templates automatically and create local
-  project prompt overrides only with `--init-prompts`.
+- Initialize editable global config and prompt templates automatically, with
+  local project files as a fallback when global storage is not writable.
+- Create local project prompt overrides only with `--init-prompts`.
 - Bound executor runs with session timeout, idle timeout, retry count, retry
   delay, and review worker limit.
 - Classify transient and rate-limit executor failures with configurable
@@ -113,8 +114,10 @@ Create local config:
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
-Global prompt templates are created automatically under
-`~/.config/gigalphex/prompts/`. Create local project overrides only when needed:
+Global config and prompt templates are created automatically under
+`~/.config/gigalphex/`. When that location is not writable, the CLI creates
+`.gigalphex/config` and `.gigalphex/prompts/` in the current project instead.
+Create local project overrides explicitly when needed:
 
 ```bash
 PYTHONPATH=python python3 -m gigalphex.cli --init-prompts

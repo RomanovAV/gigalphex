@@ -86,6 +86,35 @@ class CliTest(unittest.TestCase):
             self.assertTrue((home / ".config/gigalphex/prompts/review_synthesis.txt").is_file())
             self.assertFalse((project / ".gigalphex/prompts").exists())
 
+    def test_regular_command_falls_back_to_local_files_when_global_config_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            home.write_text("not a writable directory", encoding="utf-8")
+            project = tmp_path / "project"
+            project.mkdir()
+            skills_dir = tmp_path / "skills"
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            original_cwd = Path.cwd()
+
+            try:
+                os.chdir(project)
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(
+                    stdout
+                ), contextlib.redirect_stderr(stderr):
+                    code = main(["--install-planning-skill", "--skill-dir", str(skills_dir)])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertTrue((skills_dir / "planning/SKILL.md").is_file())
+            self.assertTrue((project / ".gigalphex/config").is_file())
+            self.assertTrue((project / ".gigalphex/prompts/task.txt").is_file())
+            self.assertTrue((project / ".gigalphex/prompts/plan_skill.txt").is_file())
+            self.assertIn("installed planning skill", stdout.getvalue())
+            self.assertEqual("", stderr.getvalue())
+
     def test_init_prompts_creates_local_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -221,7 +250,7 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
 
             self.assertEqual(0, code)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
-            self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
+            self.assertTrue((tmp_path / ".gigalphex/prompts/task.txt").is_file())
             progress = (
                 tmp_path / ".gigalphex/progress/progress-20260612-smoke.txt"
             ).read_text(encoding="utf-8")
@@ -265,6 +294,8 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             tmp_path = Path(tmp)
             repo = tmp_path / "repo"
             repo.mkdir()
+            home = tmp_path / "home"
+            home.write_text("not a writable directory", encoding="utf-8")
             original_cwd = Path.cwd()
             fake_gigacode = write_script(
                 tmp_path / "fake_gigacode.py",
@@ -296,7 +327,9 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
 
                 stdout = io.StringIO()
                 stderr = io.StringIO()
-                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(
+                    stdout
+                ), contextlib.redirect_stderr(stderr):
                     code = main(
                         [
                             str(plan),
@@ -419,7 +452,7 @@ print("- [ ] Do it")
             self.assertIn("docs/plans/", committed)
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
-            self.assertFalse((tmp_path / ".gigalphex/prompts").exists())
+            self.assertTrue((tmp_path / ".gigalphex/prompts/task.txt").is_file())
 
     def test_interactive_plan_uses_planning_skill_and_existing_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
