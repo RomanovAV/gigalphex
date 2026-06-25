@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from gigalphex.git import GitService
+from gigalphex.git import GitService, jira_branch_name
 
 
 class GitServiceTest(unittest.TestCase):
@@ -33,6 +33,31 @@ class GitServiceTest(unittest.TestCase):
                 },
                 set(git.dirty_paths()),
             )
+
+    def test_jira_branch_name_uses_task_and_plan_description(self) -> None:
+        self.assertEqual(
+            "feature/PROJ-123-add-demo-feature",
+            jira_branch_name(Path("docs/plans/20260625-add-demo-feature.md"), "PROJ-123"),
+        )
+
+    def test_commit_subjects_since_returns_new_subjects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git = GitService(repo)
+            git.run("init")
+            git.run("config", "user.email", "test@example.com")
+            git.run("config", "user.name", "GigaLphex Test")
+
+            (repo / "one.txt").write_text("one\n", encoding="utf-8")
+            git.run("add", ".")
+            git.run("commit", "-m", "initial")
+            head = git.head_commit()
+
+            (repo / "two.txt").write_text("two\n", encoding="utf-8")
+            git.run("add", ".")
+            git.run("commit", "-m", "PROJ-123 feat: add two")
+
+            self.assertEqual(["PROJ-123 feat: add two"], git.commit_subjects_since(head))
 
 
 if __name__ == "__main__":

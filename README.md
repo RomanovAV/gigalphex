@@ -113,6 +113,17 @@ PYTHONPATH=python python3 -m gigalphex.cli --dry-run ../e2e/testdata/test-plan.m
 PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md
 ```
 
+To enforce corporate Jira naming for a plan run, pass `--jira-task`. For
+example, this switches or creates a branch like
+`feature/PROJ-123-my-feature` and requires every new commit created during the
+run to start with `PROJ-123 `:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli docs/plans/my-feature.md \
+  --jira-task PROJ-123 \
+  --allow-dirty
+```
+
 Diagnose differences between direct GigaCode and GigaLphex execution by running
 this Python module from the affected project directory:
 
@@ -196,6 +207,9 @@ the current directory is inside a git repository. Use `--no-commit-plan` or
 `commit_plan_on_creation = false` to leave the plan uncommitted.
 When a full run finishes and moves the plan into `docs/plans/completed/`, that
 move is committed as `docs: complete plan <name>`.
+With `--jira-task PROJ-123`, these GigaLphex-created commits become
+`PROJ-123 docs: ...`, and plan creation happens on
+`feature/PROJ-123-<plan-description>`.
 
 Run review with a different GigaCode model:
 
@@ -299,6 +313,8 @@ the current embedded default automatically.
 Git behavior:
 
 - plan runs create/switch to a branch derived from the plan filename
+- `--jira-task TASK` enforces `feature/TASK-<description>` branch names for
+  plan creation and execution, and all new commits must start with `TASK `
 - `--worktree` runs full and tasks-only plan execution in
   `.gigalphex/worktrees/<branch>` instead of switching the current checkout
 - `--branch` overrides the branch name for normal branch switching and

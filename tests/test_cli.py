@@ -14,9 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from gigalphex.cli import (
     add_gigacode_args,
+    branch_for_plan,
     build_parser,
+    completed_plan_commit_message,
     find_interactively_created_plan,
     main,
+    normalize_jira_task,
+    plan_commit_message,
     should_auto_init,
     should_use_interactive_plan,
 )
@@ -153,6 +157,60 @@ class CliTest(unittest.TestCase):
         self.assertIsNone(parser.parse_args([]).finalize)
         self.assertTrue(parser.parse_args(["--finalize"]).finalize)
         self.assertFalse(parser.parse_args(["--no-finalize"]).finalize)
+
+    def test_jira_task_normalizes_branch_and_commit_messages(self) -> None:
+        self.assertEqual("PROJ-123", normalize_jira_task("proj-123"))
+        self.assertEqual("123", normalize_jira_task("123"))
+        self.assertEqual(
+            "feature/PROJ-123-add-demo-feature",
+            branch_for_plan(Path("docs/plans/20260625-add-demo-feature.md"), None, "PROJ-123"),
+        )
+        self.assertEqual(
+            "PROJ-123 docs: add plan 20260625-add-demo-feature",
+            plan_commit_message(Path("docs/plans/20260625-add-demo-feature.md"), "PROJ-123"),
+        )
+        self.assertEqual(
+            "PROJ-123 docs: complete plan 20260625-add-demo-feature",
+            completed_plan_commit_message(
+                Path("docs/plans/20260625-add-demo-feature.md"),
+                "PROJ-123",
+            ),
+        )
+
+    def test_invalid_jira_task_is_rejected(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(["--review", "--jira-task", "PROJ/123"])
+
+        self.assertEqual(2, code)
+        self.assertIn("Jira task must be a number or key like PROJ-123", stderr.getvalue())
+
+    def test_jira_task_rejects_no_branch_for_plan_runs(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(["docs/plans/my-plan.md", "--jira-task", "PROJ-123", "--no-branch"])
+
+        self.assertEqual(2, code)
+        self.assertIn("--jira-task requires branch creation", stderr.getvalue())
+
+    def test_jira_task_rejects_non_corporate_explicit_branch(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(
+                [
+                    "docs/plans/my-plan.md",
+                    "--jira-task",
+                    "PROJ-123",
+                    "--branch",
+                    "my-plan",
+                ]
+            )
+
+        self.assertEqual(2, code)
+        self.assertIn("feature/PROJ-123-", stderr.getvalue())
 
     def test_quick_requires_plan(self) -> None:
         stderr = io.StringIO()
@@ -475,6 +533,68 @@ print("- [ ] Do it")
             self.assertIn("add-demo-feature.md", committed)
             self.assertTrue((tmp_path / ".gigalphex/config").exists())
             self.assertTrue((tmp_path / ".gigalphex/prompts/task.txt").is_file())
+
+    def test_plan_creation_with_jira_task_uses_corporate_branch_and_commit_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+import sys
+sys.stdin.read()
+print("# Plan: Demo")
+print()
+print("## Overview")
+print("Demo plan.")
+print()
+print("### Task 1: Build")
+print("- [ ] Do it")
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                Path("README.md").write_text("# Demo\n", encoding="utf-8")
+                subprocess.run(["git", "add", "README.md"], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            "--plan",
+                            "add demo feature",
+                            "--jira-task",
+                            "proj-123",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                        ]
+                    )
+
+                branch = subprocess.run(
+                    ["git", "branch", "--show-current"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout.strip()
+                subject = subprocess.run(
+                    ["git", "log", "--format=%s", "-1"],
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout.strip()
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertEqual("feature/PROJ-123-add-demo-feature", branch)
+            self.assertTrue(subject.startswith("PROJ-123 docs: add plan "))
+            self.assertIn("created plan:", stdout.getvalue())
 
     def test_interactive_plan_uses_planning_skill_and_existing_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

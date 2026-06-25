@@ -511,6 +511,51 @@ class RunnerTest(unittest.TestCase):
 
             runner.run_tasks()
 
+    def test_task_iteration_rejects_commit_without_jira_prefix(self) -> None:
+        with temporary_repo() as (repo, plan):
+            def complete_and_commit_without_prefix(_prompt):
+                plan.write_text(plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"), encoding="utf-8")
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete task")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    jira_task="PROJ-123",
+                ),
+                CallbackExecutor(complete_and_commit_without_prefix),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "without required Jira prefix"):
+                runner.run_tasks()
+
+    def test_task_iteration_accepts_commit_with_jira_prefix(self) -> None:
+        with temporary_repo() as (repo, plan):
+            def complete_and_commit_with_prefix(_prompt):
+                plan.write_text(plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"), encoding="utf-8")
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "PROJ-123 feat: complete task")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    jira_task="PROJ-123",
+                ),
+                CallbackExecutor(complete_and_commit_with_prefix),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
     def test_task_timeout_after_clean_commit_is_recovered_without_retry(self) -> None:
         with temporary_repo() as (repo, plan):
             executor = GigaCodeExecutor(

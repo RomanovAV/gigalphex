@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Optional
 
@@ -14,13 +15,23 @@ from .config import (
     load_config,
 )
 from .executor import GigaCodeExecutor
-from .git import GitError, GitService, branch_name_from_plan, move_plan_to_completed
+from .git import (
+    GitError,
+    GitService,
+    branch_name_from_plan,
+    jira_branch_name,
+    move_plan_to_completed,
+)
 from .planner import clean_plan_output, next_plan_path
 from .progress import ProgressLog
 from .prompts import load_prompt_templates, render_make_plan, render_plan_skill
 from .runner import RunOptions, Runner
 from .skills import install_planning_skill, planning_skill_installed, planning_skill_path
 from .stats import RunStatistics, statistics_path
+
+
+JIRA_TASK_RE = re.compile(r"^(?:[A-Za-z][A-Za-z0-9]*-\d+|\d+)$")
+BRANCH_DESCRIPTION_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,6 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-ref", help="branch or git ref to compare with HEAD in --review mode")
     parser.add_argument("--branch", help="branch to create/switch to before running a plan")
     parser.add_argument("--no-branch", action="store_true", help="do not create/switch branches")
+    parser.add_argument(
+        "--jira-task",
+        help=(
+            "Jira task key or number; enforces feature/<task>-... branch names "
+            "and requires new commits to start with the task"
+        ),
+    )
     parser.add_argument("--worktree", action="store_true", help="run the plan in an isolated git worktree")
     parser.add_argument("--allow-dirty", action="store_true", help="allow starting with uncommitted changes")
     parser.add_argument("--no-move-plan", action="store_true", help="do not move completed plan to completed/")
@@ -117,12 +135,50 @@ def should_auto_init(args: argparse.Namespace) -> bool:
     return bool(args.plan_file and Path(args.plan_file).exists())
 
 
-def plan_commit_message(plan_path: Path) -> str:
-    return f"docs: add plan {plan_path.stem}"
+def normalize_jira_task(value: str) -> str:
+    normalized = value.strip().upper()
+    if not JIRA_TASK_RE.fullmatch(normalized):
+        raise ValueError("Jira task must be a number or key like PROJ-123")
+    return normalized
 
 
-def completed_plan_commit_message(plan_path: Path) -> str:
-    return f"docs: complete plan {plan_path.stem}"
+def jira_commit_message(jira_task: str, message: str) -> str:
+    return f"{jira_task} {message}" if jira_task else message
+
+
+def plan_commit_message(plan_path: Path, jira_task: str = "") -> str:
+    return jira_commit_message(jira_task, f"docs: add plan {plan_path.stem}")
+
+
+def completed_plan_commit_message(plan_path: Path, jira_task: str = "") -> str:
+    return jira_commit_message(jira_task, f"docs: complete plan {plan_path.stem}")
+
+
+def branch_for_plan(
+    plan_path: Path,
+    explicit_branch: Optional[str],
+    jira_task: str,
+) -> str:
+    if not jira_task:
+        return explicit_branch or branch_name_from_plan(plan_path)
+    if explicit_branch:
+        validate_jira_branch_name(explicit_branch, jira_task)
+        return explicit_branch
+    return jira_branch_name(plan_path, jira_task)
+
+
+def validate_jira_branch_name(branch: str, jira_task: str) -> None:
+    required_prefix = f"feature/{jira_task}-"
+    description = branch.removeprefix(required_prefix)
+    if (
+        not branch.startswith(required_prefix)
+        or not description
+        or not BRANCH_DESCRIPTION_RE.fullmatch(description)
+    ):
+        raise ValueError(
+            "with --jira-task, --branch must start with "
+            f"{required_prefix} and include a safe description"
+        )
 
 
 def add_gigacode_args(base_args: list[str], extra_args: list[str]) -> list[str]:
@@ -196,6 +252,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
 
     args = build_parser().parse_args(argv)
+    if args.jira_task:
+        try:
+            args.jira_task = normalize_jira_task(args.jira_task)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        args.jira_task = ""
     if args.force_skill_install and not args.install_planning_skill:
         print("error: --force-skill-install requires --install-planning-skill", file=sys.stderr)
         return 2
@@ -208,6 +272,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.base_ref and args.default_branch:
         print("error: --base-ref and --default-branch cannot be used together", file=sys.stderr)
         return 2
+    if args.jira_task and not (args.plan or args.plan_file or args.review):
+        print("error: --jira-task requires a plan file, --plan, or --review", file=sys.stderr)
+        return 2
+    if args.jira_task and args.no_branch and not args.review:
+        print("error: --jira-task requires branch creation; remove --no-branch", file=sys.stderr)
+        return 2
+    if args.jira_task and args.branch and (args.plan or args.plan_file):
+        try:
+            validate_jira_branch_name(args.branch, args.jira_task)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
     if args.init or args.init_prompts:
         written = local_fallback_written.copy()
         if args.init:
@@ -254,7 +330,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         git = GitService(Path("."))
         if git.init_repo_if_missing():
             print("initialized git repository")
-        if not git.has_commits() and git.commit_all_if_dirty("chore: initialize repository"):
+        if not git.has_commits() and git.commit_all_if_dirty(
+            jira_commit_message(args.jira_task, "chore: initialize repository")
+        ):
             print("committed initial repository state")
     if (
         args.init_git
@@ -315,6 +393,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         cfg.default_branch = args.base_ref
     if args.no_branch:
         cfg.create_branch = False
+    if args.jira_task and not args.review:
+        cfg.create_branch = True
     if args.worktree:
         cfg.worktree = True
     if args.allow_dirty:
@@ -383,6 +463,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
         try:
             log.section("make plan")
+            if cfg.create_branch and args.jira_task:
+                git = GitService(Path("."))
+                if git.is_repo():
+                    branch = branch_for_plan(plan_path, args.branch, args.jira_task)
+                    git.switch_or_create_branch(branch)
+                    log.write(f"branch: {branch}\n")
             log.write(f"gigacode command: {executor.command_line()}\n")
             if interactive:
                 log.write(f"interactive plan target: {plan_path}\n")
@@ -406,7 +492,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             if cfg.commit_plan_on_creation:
                 git = GitService(Path("."))
                 if git.is_repo():
-                    message = plan_commit_message(plan_path)
+                    message = plan_commit_message(plan_path, args.jira_task)
                     if auto_init_written:
                         git.commit_paths([*auto_init_written, plan_path], message)
                     else:
@@ -440,10 +526,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             cfg.default_branch = git.default_branch(cfg.default_branch)
             if args.review:
                 git.ensure_ref_exists(cfg.default_branch)
+                if args.jira_task:
+                    current_branch = git.current_branch()
+                    try:
+                        validate_jira_branch_name(current_branch, args.jira_task)
+                    except ValueError as exc:
+                        raise GitError(
+                            "current branch must follow Jira naming policy for --jira-task: "
+                            f"{exc}"
+                        ) from exc
             ignored_dirty_paths = auto_init_written if auto_init_started_clean else []
             git.ensure_clean(cfg.allow_dirty, ignored_dirty_paths)
             if cfg.worktree and plan_file is not None and not args.review:
-                branch = args.branch or branch_name_from_plan(plan_file)
+                branch = branch_for_plan(plan_file, args.branch, args.jira_task)
                 repo_root = git.repo_root()
                 try:
                     plan_relative = plan_file.relative_to(repo_root)
@@ -456,7 +551,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 os.chdir(worktree_path)
                 git = GitService(Path("."))
             elif cfg.create_branch and plan_file is not None and not args.review:
-                branch = args.branch or branch_name_from_plan(plan_file)
+                branch = branch_for_plan(plan_file, args.branch, args.jira_task)
                 git.switch_or_create_branch(branch)
         except GitError as exc:
             hint = "; pass --init-git to initialize this directory first" if str(exc) == "not inside a git repository" else ""
@@ -553,11 +648,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"review base ref: {cfg.default_branch}\n")
         else:
             log.write(f"default branch: {cfg.default_branch}\n")
+        if args.jira_task:
+            log.write(f"jira task: {args.jira_task}\n")
         if worktree_path is not None:
             log.write(f"worktree: {worktree_path}\n")
-            log.write(f"branch: {args.branch or branch_name_from_plan(plan_file)}\n")
+            log.write(f"branch: {branch_for_plan(plan_file, args.branch, args.jira_task)}\n")
         elif cfg.create_branch and plan_file is not None and not args.review:
-            log.write(f"branch: {args.branch or branch_name_from_plan(plan_file)}\n")
+            log.write(f"branch: {branch_for_plan(plan_file, args.branch, args.jira_task)}\n")
     options = RunOptions(
         plan_file=plan_file,
         progress_file=progress_file,
@@ -570,6 +667,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         dry_run=args.dry_run,
         parallel_review=not args.no_parallel_review,
         prompts=prompts,
+        jira_task=args.jira_task,
     )
 
     exit_code = 0
@@ -593,7 +691,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.section("plan")
             log.write(f"moved completed plan to {moved_to}\n")
             if git.is_repo():
-                message = completed_plan_commit_message(plan_file)
+                message = completed_plan_commit_message(plan_file, args.jira_task)
                 git.commit_paths([plan_file, moved_to], message)
                 log.write(f"committed completed plan move: {message}\n")
     except KeyboardInterrupt:

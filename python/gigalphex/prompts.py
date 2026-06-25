@@ -14,6 +14,7 @@ class PromptContext:
     plan_file: Optional[Path]
     progress_file: Path
     default_branch: str
+    jira_task: str = ""
 
     @property
     def goal(self) -> str:
@@ -101,6 +102,12 @@ TASK_PLAN_UPDATE_GUIDANCE = """Authorized checklist update:
 - do not change checkbox text, task headings, or any later task section
 - if an unchecked item was already implemented before this session, validate it and still mark it `[x]`; do not stop merely because no code change is needed
 - stage the plan file with the implementation, commit the completed task, then reread the file and verify the selected section has no actionable `[ ]` items before reporting success
+"""
+
+JIRA_COMMIT_GUIDANCE = """Jira commit policy:
+- every commit created in this phase must start exactly with `{jira_task} `
+- keep the conventional-commit type after the Jira key, for example: `{jira_task} feat: implement selected task`
+- before reporting success, inspect every commit created in this phase and verify its subject has the required prefix
 """
 
 MAKE_PLAN_PROMPT = """Create an implementation plan for this request:
@@ -457,6 +464,11 @@ def render_task_prompt(
             plan_file=context.plan_file or "(no plan file)",
         ),
     )
+    if context.jira_task:
+        rendered = _with_guidance(
+            rendered,
+            JIRA_COMMIT_GUIDANCE.format(jira_task=context.jira_task),
+        )
     return _with_guidance(rendered, TASK_FORMAT_GUIDANCE)
 
 
@@ -467,6 +479,7 @@ def _context_values(context: PromptContext) -> dict[str, object]:
         "default_branch": context.default_branch,
         "base_ref": context.default_branch,
         "goal": context.goal,
+        "jira_task": context.jira_task,
     }
 
 
@@ -556,6 +569,11 @@ def render_review_synthesis_prompt(
         agent_findings=findings_payload,
         **_context_values(context),
     )
+    if context.jira_task:
+        rendered = _with_guidance(
+            rendered,
+            JIRA_COMMIT_GUIDANCE.format(jira_task=context.jira_task),
+        )
     if not uses_findings:
         return rendered
     return _with_guidance(rendered, REVIEW_SYNTHESIS_TRUST_GUIDANCE)

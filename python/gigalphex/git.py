@@ -9,6 +9,7 @@ from typing import Iterable
 
 
 DATE_PREFIX_RE = re.compile(r"^[\d-]+")
+BRANCH_SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class GitError(RuntimeError):
@@ -117,6 +118,15 @@ class GitService:
         proc = self.run("rev-parse", "--verify", "HEAD", check=False)
         return proc.stdout.strip() if proc.returncode == 0 else ""
 
+    def commit_subjects_since(self, commit: str) -> list[str]:
+        proc = self.run(
+            "log",
+            "--format=%s",
+            f"{commit}..HEAD" if commit else "HEAD",
+            check=True,
+        )
+        return [line for line in proc.stdout.splitlines() if line]
+
     def ensure_clean(self, allow_dirty: bool, ignored_paths: Iterable[Path] = ()) -> None:
         if allow_dirty:
             return
@@ -194,6 +204,11 @@ def branch_name_from_plan(plan_file: Path) -> str:
         name = name[:-3]
     branch = DATE_PREFIX_RE.sub("", name).strip("-")
     return branch or name
+
+
+def jira_branch_name(plan_file: Path, jira_task: str) -> str:
+    description = BRANCH_SLUG_RE.sub("-", branch_name_from_plan(plan_file).lower()).strip("-")
+    return f"feature/{jira_task}-{description or 'plan'}"
 
 
 def _normalize_relative(path: Path) -> str:
