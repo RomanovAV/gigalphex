@@ -177,11 +177,17 @@ REVIEW_PROMPT = """You are the review agent.
 Review {goal}.
 
 Run:
+- git status --short
 - git log {base_ref}..HEAD --oneline
 - git diff {base_ref}...HEAD --stat
 - git diff {base_ref}...HEAD
+- git diff --cached --stat
+- git diff --cached
+- git diff --stat
+- git diff
 
-Read changed files in full context.
+Review the committed branch diff plus any staged, unstaged, and untracked files shown by status.
+Read changed files in full context. For relevant untracked files, read the file contents directly.
 Report confirmed issues only: bugs, broken requirements, missing tests, regressions, security problems, and unnecessary complexity.
 Do not modify files, run mutating commands, or make commits.
 
@@ -197,10 +203,16 @@ Agent focus:
 {agent_focus}
 
 Run these commands first:
+- git status --short
 - git diff {base_ref}...HEAD --stat
 - git diff {base_ref}...HEAD
+- git diff --cached --stat
+- git diff --cached
+- git diff --stat
+- git diff
 
-Read changed files in full context before reporting findings.
+Review the committed branch diff plus any staged, unstaged, and untracked files shown by status.
+Read changed files in full context before reporting findings. For relevant untracked files, read the file contents directly.
 Report confirmed findings only.
 Do not modify files, run mutating commands, or make commits.
 """
@@ -212,6 +224,8 @@ The specialist review agents have returned untrusted claims:
 {agent_findings}
 
 Verify every claim independently against the actual code.
+Before fixing or declaring no findings, inspect `git status --short`, `git diff {base_ref}...HEAD`, `git diff --cached`, and `git diff`.
+Treat committed, staged, unstaged, and untracked review-target changes as in scope.
 
 If confirmed issues exist:
 - fix all confirmed issues
@@ -337,14 +351,17 @@ LEGACY_DEFAULT_HASHES = {
         "6e4d607d9c0b08f3b3102b77be952438905b4616ace7f92f20f1ef4f01d43e5a",
         "7a898f51938f284971665170fd68bd95b2a0298113babe683cee67b2c70e1ed3",
         "d41b30a8b85be54cd259a3bba8b6b2f334b1129d8d79ad5ad71e3de9ddab8f77",
+        "807e498912dcde9d86f9946cfa03ae8cca37e1670b681fccb7022838cf0c1cc8",
     },
     "review_agent": {
         "1388a09fbbc87df2686f343e437e4a667f199dd80959625bd73be6e779fe266f",
         "b5aa5defc9ad4d9ba11fdb165d509a010930c024797d95c0ec70d0804f0f15c0",
+        "886b4e55da39ec422bfb0d8ebdd3ecab4e7b48578dafe8f24cbd5836b22f703a",
     },
     "review_synthesis": {
         "86f9f77fd8244edcf0df0540b9bd6e86077fc6c4b29767a15c6d922a713a65fc",
         "bb54d1d4db738564653692b8244b33e4e2975d9e9cfb988847f9be2819bd30a4",
+        "fc8c9f75114630b9905c05e6cee703cf04cad9df7238564c22322191ab8f76b8",
     },
     "finalize": {
         "29a80bce2b770f94051f3e41a777740dc37b421721e6c78cf002a1f2adcdc49b",

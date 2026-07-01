@@ -125,6 +125,13 @@ class PromptTemplatesTest(unittest.TestCase):
         self.assertIn("<<<GIGALPHEX:FINALIZE_DONE>>>", DEFAULT_PROMPTS.finalize)
         self.assertIn("<<<GIGALPHEX:FINALIZE_FAILED>>>", DEFAULT_PROMPTS.finalize)
 
+    def test_default_review_prompts_include_dirty_tree_context(self) -> None:
+        self.assertIn("git status --short", DEFAULT_PROMPTS.review)
+        self.assertIn("git diff --cached", DEFAULT_PROMPTS.review)
+        self.assertIn("git diff --stat", DEFAULT_PROMPTS.review_agent)
+        self.assertIn("untracked files", DEFAULT_PROMPTS.review_agent)
+        self.assertIn("git diff --cached", DEFAULT_PROMPTS.review_synthesis)
+
     def test_loads_local_prompt_over_embedded_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             prompt_dir = Path(tmp) / "prompts"

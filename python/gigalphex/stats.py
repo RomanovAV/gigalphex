@@ -34,6 +34,7 @@ class RunStatistics:
     def __init__(self) -> None:
         self._started = time.monotonic()
         self._finished: Optional[float] = None
+        self._status = "running"
         self._invocations: list[InvocationStat] = []
         self._lock = threading.Lock()
 
@@ -41,10 +42,11 @@ class RunStatistics:
         with self._lock:
             self._invocations.append(invocation)
 
-    def finish(self) -> None:
+    def finish(self, status: str = "success") -> None:
         with self._lock:
             if self._finished is None:
                 self._finished = time.monotonic()
+            self._status = status
 
     @property
     def wall_duration_ms(self) -> int:
@@ -62,6 +64,7 @@ class RunStatistics:
         known_usage = [item.usage for item in invocations if item.usage is not None]
         totals = _sum_usage(known_usage)
         return {
+            "status": self.status,
             "wall_duration_ms": self.wall_duration_ms,
             "call_count": len(invocations),
             "summed_call_duration_ms": sum(item.wall_duration_ms for item in invocations),
@@ -87,6 +90,7 @@ class RunStatistics:
         data = self.to_dict()
         usage = data["usage"]
         lines = [
+            f"status: {data['status']}",
             f"total wall time: {_format_duration(int(data['wall_duration_ms']))}",
             f"GigaCode calls: {data['call_count']}",
             "summed call time: "
@@ -134,6 +138,11 @@ class RunStatistics:
                 f"{usage_text} model={models}"
             )
         return "\n".join(lines) + "\n"
+
+    @property
+    def status(self) -> str:
+        with self._lock:
+            return self._status
 
 
 def statistics_path(progress_file: Path) -> Path:

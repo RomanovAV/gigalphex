@@ -936,9 +936,9 @@ else:
             self.assertEqual("", status)
 
     def test_plan_run_writes_token_and_timing_statistics(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home_tmp:
             tmp_path = Path(tmp)
-            home = tmp_path / "home"
+            home = Path(home_tmp)
             original_cwd = Path.cwd()
             fake_gigacode = write_script(
                 tmp_path / "fake_gigacode.py",
@@ -1016,15 +1016,52 @@ print(json.dumps({
             finally:
                 os.chdir(original_cwd)
 
-            stats_file = tmp_path / ".gigalphex/progress/stats-20260612-smoke.json"
+            stats_file = (tmp_path / ".gigalphex/progress/stats-20260612-smoke.json").resolve()
             stats = json.loads(stats_file.read_text(encoding="utf-8"))
             self.assertEqual(0, code)
             self.assertEqual(1, stats["call_count"])
             self.assertEqual(105, stats["usage"]["total_tokens"])
             self.assertEqual("task", stats["invocations"][0]["session"])
             self.assertEqual(1250, stats["invocations"][0]["reported_duration_ms"])
+            self.assertEqual("success", stats["status"])
+            self.assertIn("status: success", stdout.getvalue())
             self.assertIn("tokens: input=100 output=5", stdout.getvalue())
-            self.assertIn(f"statistics: {stats_file.relative_to(tmp_path)}", stdout.getvalue())
+            self.assertIn(f"statistics: {stats_file}", stdout.getvalue())
+
+    def test_interrupted_run_writes_statistics_file_with_absolute_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home_tmp:
+            tmp_path = Path(tmp)
+            home = Path(home_tmp)
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                Path("README.md").write_text("# Demo\n", encoding="utf-8")
+                subprocess.run(["git", "add", "README.md"], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with (
+                    patch.dict(os.environ, {"HOME": str(home)}),
+                    patch("gigalphex.cli.Runner.run", side_effect=KeyboardInterrupt),
+                    contextlib.redirect_stdout(stdout),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    code = main(["--review", "--gigacode-command", "unused-gigacode"])
+            finally:
+                os.chdir(original_cwd)
+
+            stats_file = (tmp_path / ".gigalphex/progress/stats-review.json").resolve()
+            stats = json.loads(stats_file.read_text(encoding="utf-8"))
+            self.assertEqual(130, code)
+            self.assertEqual("interrupted", stats["status"])
+            self.assertEqual(0, stats["call_count"])
+            self.assertIn("status: interrupted", stdout.getvalue())
+            self.assertIn(f"statistics: {stats_file}", stdout.getvalue())
+            self.assertIn("interrupted", stderr.getvalue())
 
     def test_plan_run_can_use_isolated_worktree_branch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

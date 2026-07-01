@@ -101,8 +101,9 @@ Observed GigaCode constraints:
   for example `.gigalphex/progress/stats-my-feature.json`. It includes each
   GigaCode attempt, measured wall time, GigaCode/API durations when reported,
   model names, per-call tokens, aggregate tokens, total run wall time, and the
-  sum of call durations. Summed call time may exceed wall time because review
-  agents run in parallel.
+  sum of call durations. The CLI prints the absolute statistics path and records
+  run status such as `success`, `failed`, or `interrupted`. Summed call time may
+  exceed wall time because review agents run in parallel.
 - GigaCode runs on Node.js, so Node warnings such as
   `MaxListenersExceededWarning` may appear in combined output.
 
@@ -322,7 +323,9 @@ Git behavior:
 - review-only mode does not switch branches
 - `--review --base-ref REF` validates the ref and compares it with the current
   `HEAD`
-- dirty working trees are rejected unless `--allow-dirty` is passed
+- dirty working trees are rejected unless `--allow-dirty` is passed; with
+  `--allow-dirty`, review prompts include committed, staged, unstaged, and
+  untracked changes via `git status --short`, `git diff --cached`, and `git diff`
 - completed full runs move the plan file to `completed/`
 - use `--no-branch` or `--no-move-plan` to disable those steps
 

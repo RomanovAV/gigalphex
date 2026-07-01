@@ -135,7 +135,13 @@ class GitService:
         ignored = {_normalize_relative(path) for path in ignored_paths}
         remaining = [path for path in dirty if _normalize_relative(path) not in ignored]
         if remaining:
-            raise GitError("working tree has uncommitted changes; commit/stash them or pass --allow-dirty")
+            shown = ", ".join(str(path) for path in remaining[:5])
+            if len(remaining) > 5:
+                shown += f", ... ({len(remaining)} total)"
+            raise GitError(
+                "working tree has uncommitted changes "
+                f"({shown}); commit/stash them or pass --allow-dirty"
+            )
 
     def branch_exists(self, branch: str) -> bool:
         proc = self.run("rev-parse", "--verify", "--quiet", branch, check=False)

@@ -44,6 +44,7 @@ class RunStatisticsTest(unittest.TestCase):
 
         data = stats.to_dict()
 
+        self.assertEqual("success", data["status"])
         self.assertEqual(2, data["call_count"])
         self.assertEqual(4000, data["summed_call_duration_ms"])
         self.assertEqual(
@@ -67,7 +68,16 @@ class RunStatisticsTest(unittest.TestCase):
             data = json.loads(path.read_text(encoding="utf-8"))
 
             self.assertEqual(0, data["call_count"])
+            self.assertEqual("success", data["status"])
             self.assertIsNone(data["usage"])
+
+    def test_marks_interrupted_status(self) -> None:
+        stats = RunStatistics()
+
+        stats.finish("interrupted")
+
+        self.assertEqual("interrupted", stats.to_dict()["status"])
+        self.assertIn("status: interrupted", stats.render_text())
 
     def test_statistics_path_matches_progress_file(self) -> None:
         self.assertEqual(

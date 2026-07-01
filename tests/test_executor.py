@@ -4,6 +4,7 @@ import os
 import stat
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -135,6 +136,67 @@ class ExecutorTest(unittest.TestCase):
         joined = "\n".join(diagnostics)
         self.assertIn("session=review-agent:quality event=attempt_started", joined)
         self.assertIn("session=review-agent:testing event=attempt_started", joined)
+
+    def test_batch_interrupt_terminates_active_sessions(self) -> None:
+        executor = GigaCodeExecutor(name="review-agent")
+        success = ExecResult(output="NO FINDINGS\n", returncode=0)
+
+        with (
+            patch.object(executor, "_run_with_retries", return_value=success),
+            patch("gigalphex.executor.as_completed", side_effect=KeyboardInterrupt),
+            patch.object(executor, "terminate_active") as terminate_active,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                executor.run_batch({"quality": "quality prompt"})
+
+        terminate_active.assert_called_once_with("interrupted")
+
+    def test_terminate_active_stops_running_process(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            marker = tmp_path / "started"
+            script = write_script(
+                tmp_path / "sleep.py",
+                f"""#!/usr/bin/env python3
+from pathlib import Path
+import sys
+import time
+Path({str(marker)!r}).write_text("started", encoding="utf-8")
+print("started", flush=True)
+time.sleep(30)
+""",
+            )
+            diagnostics: list[str] = []
+            executor = GigaCodeExecutor(
+                command=str(script),
+                output=lambda _line: None,
+                diagnostic=diagnostics.append,
+                name="task",
+            )
+            results: list[ExecResult] = []
+            errors: list[BaseException] = []
+
+            def run_session() -> None:
+                try:
+                    results.append(executor.run("prompt"))
+                except BaseException as exc:
+                    errors.append(exc)
+
+            thread = threading.Thread(target=run_session)
+            thread.start()
+            deadline = time.monotonic() + 3
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+
+            self.assertTrue(marker.exists())
+            executor.terminate_active("manual_cancel")
+            thread.join(timeout=4)
+
+            self.assertFalse(thread.is_alive())
+            self.assertFalse(errors)
+            self.assertEqual(1, len(results))
+            self.assertFalse(results[0].ok)
+            self.assertIn("reason=manual_cancel", "\n".join(diagnostics))
 
     def test_custom_args_without_prompt_placeholder_append_prompt_option(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -631,9 +693,13 @@ subprocess.Popen([sys.executable, "-c", {child_code!r}])
 
             self.assertLess(time.monotonic() - start, 4)
             self.assertTrue(result.timed_out)
-            size_after_return = heartbeat.stat().st_size
-            time.sleep(0.2)
-            self.assertEqual(size_after_return, heartbeat.stat().st_size)
+            if heartbeat.exists():
+                size_after_return = heartbeat.stat().st_size
+                time.sleep(0.2)
+                self.assertEqual(size_after_return, heartbeat.stat().st_size)
+            else:
+                time.sleep(0.2)
+                self.assertFalse(heartbeat.exists())
 
     def test_idle_timeout_marks_result_after_silent_period(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -91,6 +91,13 @@ class ExecResult:
 RetryGuard = Callable[[ExecResult], bool]
 
 
+@dataclass(frozen=True)
+class _ActiveProcess:
+    session: str
+    proc: subprocess.Popen[bytes]
+    process_group: Optional[int]
+
+
 class GigaCodeExecutor:
     def __init__(
         self,
@@ -125,6 +132,8 @@ class GigaCodeExecutor:
         self.diagnostic = diagnostic or (lambda _line: None)
         self.name = name
         self.statistics = statistics
+        self._active_lock = threading.Lock()
+        self._active_processes: dict[int, _ActiveProcess] = {}
 
     def run(
         self,
@@ -193,7 +202,10 @@ class GigaCodeExecutor:
         if not prompts:
             return {}
         results: dict[str, ExecResult] = {}
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, len(prompts))) as pool:
+        pool = ThreadPoolExecutor(max_workers=min(self.max_workers, len(prompts)))
+        futures = {}
+        interrupted = False
+        try:
             futures = {
                 pool.submit(
                     self._run_with_retries,
@@ -206,6 +218,15 @@ class GigaCodeExecutor:
             for future in as_completed(futures):
                 name = futures[future]
                 results[name] = future.result()
+        except KeyboardInterrupt:
+            interrupted = True
+            self._event(self.name, "batch_interrupted", active_futures=len(futures))
+            for future in futures:
+                future.cancel()
+            self.terminate_active("interrupted")
+            raise
+        finally:
+            pool.shutdown(wait=not interrupted, cancel_futures=interrupted)
         return results
 
     def command_line(self) -> str:
@@ -324,6 +345,8 @@ class GigaCodeExecutor:
             raise RuntimeError(f"gigacode command not found: {self.command}") from exc
 
         self._event(session, "started", pid=getattr(proc, "pid", "unknown"))
+        process_group = proc.pid if os.name == "posix" else None
+        self._register_process(session, proc, process_group)
         assert proc.stdout is not None
         assert proc.stderr is not None
         if pipe_stdin:
@@ -342,7 +365,6 @@ class GigaCodeExecutor:
         timed_out = False
         idle_timed_out = False
         first_output_seen = False
-        process_group = proc.pid if os.name == "posix" else None
         termination_lock = threading.Lock()
         termination_started = False
 
@@ -504,6 +526,7 @@ class GigaCodeExecutor:
                 timer.cancel()
             if idle_timer is not None:
                 idle_timer.cancel()
+            self._unregister_process(proc)
             proc.stdout.close()
             proc.stderr.close()
 
@@ -556,6 +579,72 @@ class GigaCodeExecutor:
             approval_unavailable=result.approval_unavailable,
         )
         return result
+
+    def terminate_active(self, reason: str) -> None:
+        with self._active_lock:
+            active = list(self._active_processes.values())
+        for item in active:
+            self._terminate_registered_process(item, reason)
+
+    def _register_process(
+        self,
+        session: str,
+        proc: subprocess.Popen[bytes],
+        process_group: Optional[int],
+    ) -> None:
+        with self._active_lock:
+            self._active_processes[id(proc)] = _ActiveProcess(
+                session=session,
+                proc=proc,
+                process_group=process_group,
+            )
+
+    def _unregister_process(self, proc: subprocess.Popen[bytes]) -> None:
+        with self._active_lock:
+            self._active_processes.pop(id(proc), None)
+
+    def _terminate_registered_process(
+        self,
+        item: _ActiveProcess,
+        reason: str,
+    ) -> None:
+        proc = item.proc
+        if proc.poll() is not None:
+            return
+        if item.process_group is not None:
+            _terminate_process_group(
+                proc,
+                process_group=item.process_group,
+                grace_seconds=PROCESS_TERMINATION_GRACE_SECONDS,
+                poll_seconds=PROCESS_TERMINATION_POLL_SECONDS,
+                event=lambda event, **fields: self._event(
+                    item.session,
+                    event,
+                    reason=reason,
+                    **fields,
+                ),
+            )
+            return
+
+        self._event(
+            item.session,
+            "terminating",
+            reason=reason,
+            signal="terminate",
+            target="process",
+        )
+        proc.terminate()
+        try:
+            proc.wait(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            self._event(
+                item.session,
+                "termination_escalated",
+                reason=reason,
+                signal="kill",
+                target="process",
+            )
+            proc.kill()
 
     def _record_statistics(
         self,

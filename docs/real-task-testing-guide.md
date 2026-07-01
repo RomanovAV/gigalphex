@@ -37,6 +37,13 @@ PYTHONPATH=python python3 -m unittest discover -s tests
 PYTHONPATH=python python3 -m gigalphex.cli --init
 ```
 
+Unit-тесты не запускают `gigacode` и не должны выполнять системные команды
+перезагрузки. Если после этой команды машина или IDE/терминал перезапустились,
+сохраните версию ОС, `python3 --version`, последнюю видимую строку вывода и
+уточните, это был полный reboot ОС или перезапуск сессии/терминала. До
+выяснения причины безопаснее повторять проверку в чистом клоне или отдельной
+VM/контейнере.
+
 Глобальные конфиг и шаблоны промптов автоматически создаются в
 `~/.config/gigalphex/`. Если эта директория недоступна для записи, CLI создаёт
 `.gigalphex/config` и `.gigalphex/prompts/` в текущем проекте. Если для
@@ -153,6 +160,18 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review --base-ref develop
 ```
 
+По умолчанию review стартует только из чистого рабочего дерева и сравнивает
+текущую ветку с base-ref. Если нужно ревьюить незакоммиченные staged,
+unstaged или untracked изменения, запускайте review явно с `--allow-dirty`:
+
+```bash
+PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --review --base-ref develop --allow-dirty
+```
+
+В этом режиме review-промпты включают `git status --short`, committed diff,
+`git diff --cached` и обычный `git diff`, чтобы локальные изменения попали в
+контекст ревью.
+
 Review-агенты работают только на чтение и возвращают замечания. Исправления,
 тесты и коммит `fix: address code review findings` выполняет только synthesis.
 Review-агенты используют `review_model`, а synthesis — `task_model`, как и
@@ -177,6 +196,11 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli docs/plans/2026061
 ```bash
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli docs/plans/20260617-add-health-check-endpoint.md --allow-dirty
 ```
+
+После каждого недемо-запуска смотрите путь в строке `statistics:`. CLI печатает
+абсолютный путь к JSON-файлу статистики, например
+`/repo/.gigalphex/progress/stats-review.json`; при interrupt файл всё равно
+должен остаться со статусом `interrupted`.
 
 ## Паттерны хороших задач
 

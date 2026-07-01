@@ -29,6 +29,7 @@ from .signals import (
     REVIEW_DONE,
     TASK_FAILED,
 )
+from .stats import statistics_path
 
 
 @dataclass
@@ -335,9 +336,12 @@ class Runner:
             raise RuntimeError(
                 f"task {self._task_label(selected_task)} completed without creating a commit"
             )
-        if self._uncommitted_paths() - dirty_before:
+        new_dirty = self._uncommitted_paths() - dirty_before
+        if new_dirty:
+            paths = ", ".join(self._display_path(path) for path in sorted(new_dirty))
             raise RuntimeError(
-                f"task {self._task_label(selected_task)} left new uncommitted changes in the working tree"
+                f"task {self._task_label(selected_task)} left new uncommitted changes "
+                f"in the working tree: {paths}"
             )
         self._validate_new_commit_prefix(
             head_before,
@@ -552,12 +556,21 @@ class Runner:
     def _uncommitted_paths(self) -> set[Path]:
         git = self._git()
         repo_root = git.repo_root()
-        progress_file = self.options.progress_file.resolve()
+        ignored = {
+            self.options.progress_file.resolve(),
+            statistics_path(self.options.progress_file).resolve(),
+        }
         return {
             (repo_root / path).resolve()
             for path in git.dirty_paths()
-            if (repo_root / path).resolve() != progress_file
+            if (repo_root / path).resolve() not in ignored
         }
+
+    def _display_path(self, path: Path) -> str:
+        try:
+            return str(path.relative_to(self._git().repo_root()))
+        except ValueError:
+            return str(path)
 
     def _render_review_synthesis_prompt(
         self,

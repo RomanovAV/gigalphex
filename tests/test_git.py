@@ -40,6 +40,16 @@ class GitServiceTest(unittest.TestCase):
             jira_branch_name(Path("docs/plans/20260625-add-demo-feature.md"), "PROJ-123"),
         )
 
+    def test_ensure_clean_reports_dirty_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git = GitService(repo)
+            git.run("init")
+            (repo / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(Exception, "dirty.txt"):
+                git.ensure_clean(False)
+
     def test_commit_subjects_since_returns_new_subjects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

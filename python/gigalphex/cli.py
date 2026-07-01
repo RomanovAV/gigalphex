@@ -562,6 +562,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
     statistics = RunStatistics()
+    stats_file = statistics_path(progress_file).resolve()
+    if not args.dry_run:
+        statistics.write_json(stats_file)
     task_executor = GigaCodeExecutor(
         command=cfg.gigacode_command,
         args=cfg.args_for_phase("task"),
@@ -671,6 +674,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     exit_code = 0
+    run_status = "success"
     try:
         Runner(
             options,
@@ -697,14 +701,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         exit_code = 130
+        run_status = "interrupted"
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         exit_code = 1
+        run_status = "failed"
     finally:
         if not args.dry_run:
-            statistics.finish()
+            statistics.finish(run_status)
             report = statistics.render_text()
-            stats_file = statistics_path(progress_file)
             statistics.write_json(stats_file)
             log.section("run statistics")
             log.write(report)
