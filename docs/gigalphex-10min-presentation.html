@@ -1,0 +1,1416 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gigalphex - 10 минут о функциональности</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --bg-soft: #25272d;
+      --panel: #2b2d34;
+      --panel-strong: #31343d;
+      --line: #434752;
+      --line-soft: #383b45;
+      --text: #f2f3f5;
+      --muted: #aeb4c0;
+      --subtle: #7f8794;
+      --blue: #4daafc;
+      --cyan: #42d9c8;
+      --green: #6fdd8b;
+      --orange: #f4a261;
+      --red: #ff6b7a;
+      --purple: #b785ff;
+      --yellow: #f7d66b;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius: 8px;
+      --slide-scale: 1;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --ui: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ui);
+      letter-spacing: 0;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
+    }
+
+    .deck::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(77, 170, 252, 0.12), transparent 22%),
+        linear-gradient(180deg, rgba(183, 133, 255, 0.10), transparent 28%);
+      opacity: 0.45;
+    }
+
+    .topbar {
+      position: absolute;
+      z-index: 20;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 20px;
+      background: #24262c;
+      border-bottom: 1px solid #15161a;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .dot.red { background: #ff5f57; }
+    .dot.yellow { background: #febc2e; }
+    .dot.green { background: #28c840; }
+
+    .crumbs {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .crumbs strong {
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .status-chip {
+      min-width: 116px;
+      padding: 5px 10px;
+      border: 1px solid #4c5260;
+      border-radius: 6px;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+      text-align: center;
+      background: #202329;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 48px 0 34px;
+      display: none;
+      padding: 44px 56px 42px;
+      overflow: hidden;
+    }
+
+    .slide.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .slide-frame {
+      position: relative;
+      z-index: 1;
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: 34px;
+      align-items: center;
+      transform: scale(var(--slide-scale));
+      transform-origin: center center;
+    }
+
+    .slide-frame.wide {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: var(--cyan);
+      box-shadow: 13px 0 0 var(--purple), 26px 0 0 var(--orange);
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      color: var(--text);
+      line-height: 1.04;
+      font-weight: 780;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 56px;
+      max-width: 780px;
+    }
+
+    h2 {
+      font-size: 42px;
+      max-width: 790px;
+    }
+
+    .lead {
+      margin: 20px 0 0;
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.52;
+    }
+
+    .headline-emphasis {
+      color: var(--blue);
+    }
+
+    .accent-green { color: var(--green); }
+    .accent-orange { color: var(--orange); }
+    .accent-purple { color: var(--purple); }
+    .accent-red { color: var(--red); }
+    .accent-cyan { color: var(--cyan); }
+    .accent-yellow { color: var(--yellow); }
+
+    .talk-time {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 24px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+      background: rgba(37, 39, 45, 0.72);
+    }
+
+    .talk-time::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .bullets {
+      display: grid;
+      gap: 13px;
+      margin-top: 28px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .bullets li {
+      position: relative;
+      padding-left: 24px;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.44;
+    }
+
+    .bullets li::before {
+      content: "";
+      position: absolute;
+      top: 11px;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: var(--blue);
+    }
+
+    .bullets li:nth-child(2)::before { background: var(--green); }
+    .bullets li:nth-child(3)::before { background: var(--orange); }
+    .bullets li:nth-child(4)::before { background: var(--purple); }
+    .bullets li:nth-child(5)::before { background: var(--red); }
+
+    .ide-panel,
+    .visual-panel,
+    .code-panel,
+    .matrix-panel,
+    .terminal-panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(37, 39, 45, 0.92);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .ide-tabs {
+      display: flex;
+      min-height: 38px;
+      border-bottom: 1px solid #191b1f;
+      background: #2b2d33;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 0 14px;
+      border-right: 1px solid #1f2127;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      color: var(--text);
+      background: #1f2127;
+      border-top: 2px solid var(--blue);
+    }
+
+    .file-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: var(--orange);
+      flex: 0 0 auto;
+    }
+
+    .editor {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      min-height: 330px;
+      background: #1f2127;
+      font-family: var(--mono);
+      font-size: 15px;
+      line-height: 1.85;
+    }
+
+    .line-numbers {
+      padding: 18px 8px 18px 0;
+      color: #626977;
+      text-align: right;
+      user-select: none;
+      background: #1d1f24;
+      border-right: 1px solid #2c3038;
+    }
+
+    .code-lines {
+      padding: 18px 22px;
+      color: #c9d1dc;
+      overflow: hidden;
+    }
+
+    .code-line {
+      white-space: nowrap;
+    }
+
+    .token-comment { color: #7a8494; }
+    .token-key { color: var(--purple); }
+    .token-str { color: var(--green); }
+    .token-fn { color: var(--blue); }
+    .token-warn { color: var(--orange); }
+    .token-ok { color: var(--cyan); }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 34px;
+    }
+
+    .pipeline-step {
+      position: relative;
+      min-height: 142px;
+      padding: 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #252830;
+    }
+
+    .step-index {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      color: #101317;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 800;
+      background: var(--blue);
+    }
+
+    .pipeline-step:nth-child(2) .step-index { background: var(--green); }
+    .pipeline-step:nth-child(3) .step-index { background: var(--orange); }
+    .pipeline-step:nth-child(4) .step-index { background: var(--purple); }
+    .pipeline-step:nth-child(5) .step-index { background: var(--cyan); }
+
+    .pipeline-step h3,
+    .matrix-cell h3,
+    .feature-tile h3 {
+      margin: 14px 0 8px;
+      font-size: 17px;
+      line-height: 1.25;
+      color: var(--text);
+    }
+
+    .pipeline-step p,
+    .matrix-cell p,
+    .feature-tile p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.42;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 34px;
+    }
+
+    .feature-tile {
+      min-height: 150px;
+      padding: 16px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #252830;
+    }
+
+    .feature-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #111418;
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 800;
+      background: var(--blue);
+    }
+
+    .feature-tile:nth-child(2) .feature-icon { background: var(--green); }
+    .feature-tile:nth-child(3) .feature-icon { background: var(--orange); }
+    .feature-tile:nth-child(4) .feature-icon { background: var(--purple); }
+    .feature-tile:nth-child(5) .feature-icon { background: var(--cyan); }
+    .feature-tile:nth-child(6) .feature-icon { background: var(--red); }
+
+    .plan-visual {
+      padding: 0;
+    }
+
+    .plan-body {
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+      background: #1f2127;
+      font-family: var(--mono);
+    }
+
+    .plan-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 34px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .checkbox {
+      width: 17px;
+      height: 17px;
+      border: 1px solid #596170;
+      border-radius: 4px;
+      display: grid;
+      place-items: center;
+      color: #101317;
+      font-weight: 900;
+    }
+
+    .checkbox.done {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .checkbox.next {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(77, 170, 252, 0.18);
+    }
+
+    .row-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row-tag {
+      padding: 3px 7px;
+      border-radius: 5px;
+      color: var(--subtle);
+      background: #2b2e36;
+      border: 1px solid #373b45;
+      font-size: 12px;
+    }
+
+    .row-tag.active {
+      color: var(--blue);
+      border-color: rgba(77, 170, 252, 0.45);
+      background: rgba(77, 170, 252, 0.08);
+    }
+
+    .review-ring {
+      position: relative;
+      width: min(440px, 100%);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      display: grid;
+      place-items: center;
+    }
+
+    .review-core {
+      width: 150px;
+      height: 150px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      color: var(--text);
+      background: #252830;
+      border: 1px solid var(--line);
+      font-weight: 750;
+      line-height: 1.25;
+    }
+
+    .agent-node {
+      position: absolute;
+      width: 132px;
+      min-height: 72px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #252830;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .agent-node strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-family: var(--ui);
+      font-size: 14px;
+    }
+
+    .agent-node:nth-child(2) { top: 0; left: 50%; transform: translateX(-50%); border-color: rgba(77,170,252,0.55); }
+    .agent-node:nth-child(3) { top: 30%; right: 0; border-color: rgba(111,221,139,0.55); }
+    .agent-node:nth-child(4) { bottom: 0; right: 9%; border-color: rgba(244,162,97,0.55); }
+    .agent-node:nth-child(5) { bottom: 0; left: 9%; border-color: rgba(183,133,255,0.55); }
+    .agent-node:nth-child(6) { top: 30%; left: 0; border-color: rgba(66,217,200,0.55); }
+
+    .matrix-panel {
+      padding: 18px;
+    }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .matrix-cell {
+      min-height: 130px;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line-soft);
+      background: #252830;
+    }
+
+    .matrix-cell h3 {
+      margin-top: 0;
+    }
+
+    .terminal-panel {
+      background: #15171b;
+    }
+
+    .terminal-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 38px;
+      padding: 0 14px;
+      border-bottom: 1px solid #2a2e36;
+      background: #202329;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .terminal-lines {
+      padding: 18px 20px;
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.75;
+      color: #cdd5e0;
+      overflow: hidden;
+    }
+
+    .terminal-lines code {
+      color: var(--green);
+      font-family: inherit;
+    }
+
+    .terminal-muted {
+      color: #737c8a;
+    }
+
+    .split-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .mini-panel {
+      min-height: 156px;
+      padding: 16px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #252830;
+    }
+
+    .mini-panel h3 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      color: var(--text);
+    }
+
+    .mini-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.46;
+    }
+
+    .tag-line {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .tag {
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      background: rgba(37, 39, 45, 0.8);
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tag.blue { color: var(--blue); border-color: rgba(77, 170, 252, 0.45); }
+    .tag.green { color: var(--green); border-color: rgba(111, 221, 139, 0.45); }
+    .tag.orange { color: var(--orange); border-color: rgba(244, 162, 97, 0.45); }
+    .tag.purple { color: var(--purple); border-color: rgba(183, 133, 255, 0.45); }
+    .tag.cyan { color: var(--cyan); border-color: rgba(66, 217, 200, 0.45); }
+
+    .bottom-bar {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 34px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      background: #24262c;
+      border-top: 1px solid #15161a;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-button {
+      width: 26px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background: #2d3038;
+      border: 1px solid #464b57;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      color: var(--text);
+      border-color: var(--blue);
+      outline: none;
+    }
+
+    .progress {
+      height: 4px;
+      border-radius: 999px;
+      background: #17191d;
+      overflow: hidden;
+      border: 1px solid #30343c;
+    }
+
+    .progress-fill {
+      width: calc(var(--progress, 0) * 100%);
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--orange));
+    }
+
+    .counter {
+      min-width: 74px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .mobile-stack {
+      display: none;
+    }
+
+    @media (max-width: 1040px) {
+      body {
+        overflow: hidden;
+      }
+
+      .deck {
+        min-height: 0;
+        height: 100vh;
+      }
+
+      .slide {
+        position: absolute;
+        inset: 48px 0 34px;
+        display: none;
+        padding: 34px 24px 44px;
+      }
+
+      h1 { font-size: 42px; }
+      h2 { font-size: 34px; }
+      .lead { font-size: 18px; }
+      .bullets li { font-size: 17px; }
+
+      .topbar {
+        position: absolute;
+      }
+
+      .bottom-bar {
+        position: absolute;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .topbar {
+        grid-template-columns: auto 1fr;
+        padding: 0 12px;
+      }
+
+      .status-chip {
+        display: none;
+      }
+
+      .slide {
+        padding: 28px 16px 40px;
+      }
+
+      .slide-frame,
+      .slide-frame.wide {
+        grid-template-columns: 1fr;
+        gap: 22px;
+        align-items: start;
+      }
+
+      h1 { font-size: 34px; }
+      h2 { font-size: 28px; }
+      .lead { font-size: 16px; }
+      .pipeline,
+      .feature-grid,
+      .split-list,
+      .matrix {
+        grid-template-columns: 1fr;
+      }
+
+      .review-ring {
+        display: none;
+      }
+
+      .mobile-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .editor {
+        grid-template-columns: 34px 1fr;
+        font-size: 12px;
+      }
+      .code-lines {
+        padding: 14px 12px;
+      }
+      .code-line {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .line-numbers {
+        padding-top: 14px;
+      }
+      .row-label {
+        white-space: normal;
+      }
+    }
+
+    @media print {
+      body {
+        overflow: visible;
+        background: white;
+      }
+
+      .deck {
+        width: auto;
+        height: auto;
+        background: #1e1f22;
+      }
+
+      .topbar,
+      .bottom-bar {
+        display: none;
+      }
+
+      .slide {
+        position: relative;
+        inset: auto;
+        display: block !important;
+        min-height: 100vh;
+        page-break-after: always;
+        padding: 42px;
+        overflow: visible;
+      }
+
+      .slide-frame {
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Презентация gigalphex">
+    <div class="topbar" aria-hidden="true">
+      <div class="window-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="crumbs">
+        <span>gigalphex</span>
+        <span>/</span>
+        <strong>10-minute-overview.html</strong>
+      </div>
+      <div class="status-chip">GigaCode ready</div>
+    </div>
+
+    <section class="slide active" data-title="Вступление">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">10 минут - функциональность проекта</p>
+          <h1>gigalphex: управляемый автономный цикл поверх <span class="headline-emphasis">GigaCode CLI</span></h1>
+          <p class="lead">Проект превращает обычный агентский запуск в воспроизводимый процесс: план, одна задача за итерацию, коммит, review-фан-аут, synthesis/fix и финальная проверка.</p>
+          <div class="talk-time">0:00 - 0:50</div>
+          <div class="tag-line">
+            <span class="tag blue">Python CLI</span>
+            <span class="tag green">Markdown plans</span>
+            <span class="tag orange">Parallel review</span>
+            <span class="tag purple">Git workflow</span>
+          </div>
+        </div>
+        <div class="ide-panel" aria-label="IDE style preview">
+          <div class="ide-tabs">
+            <div class="tab active"><span class="file-dot"></span>runner.py</div>
+            <div class="tab"><span class="file-dot"></span>plan.md</div>
+            <div class="tab"><span class="file-dot"></span>review.txt</div>
+          </div>
+          <div class="editor">
+            <div class="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9</div>
+            <div class="code-lines">
+              <div class="code-line"><span class="token-key">phase</span> = <span class="token-str">"plan"</span></div>
+              <div class="code-line"><span class="token-fn">select</span>(first_uncompleted_task)</div>
+              <div class="code-line"><span class="token-fn">run</span>(gigacode, one_task)</div>
+              <div class="code-line"><span class="token-fn">validate</span>(tests, checklist)</div>
+              <div class="code-line"><span class="token-fn">commit</span>(task_result)</div>
+              <div class="code-line"><span class="token-key">if</span> all_tasks_done:</div>
+              <div class="code-line">&nbsp;&nbsp;<span class="token-fn">review_parallel</span>(agents=5)</div>
+              <div class="code-line">&nbsp;&nbsp;<span class="token-fn">synthesize</span>(findings)</div>
+              <div class="code-line"><span class="token-ok"><<<GIGALPHEX:FINALIZE_DONE>>></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Зачем">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Проблема, которую закрывает проект</p>
+          <h2>Агент умеет писать код. Команде нужен <span class="accent-green">контур исполнения</span>.</h2>
+          <p class="lead">gigalphex добавляет поверх GigaCode дисциплину рабочего процесса: что именно делаем, когда считаем готовым, где смотреть след выполнения и как не потерять контроль над git-состоянием.</p>
+          <ul class="bullets">
+            <li>Большая задача дробится на независимые markdown-секции.</li>
+            <li>Каждая итерация привязана к одному выбранному разделу плана.</li>
+            <li>Успех требует проверки, обновленного чеклиста и коммита.</li>
+            <li>Ревью и финализация выполняются отдельными фазами, а не “на глаз”.</li>
+          </ul>
+          <div class="talk-time">0:50 - 1:45</div>
+        </div>
+        <div class="visual-panel">
+          <div class="terminal-title">
+            <span>before-after.diff</span>
+            <span class="accent-cyan">structured loop</span>
+          </div>
+          <div class="matrix-panel" style="border:0; box-shadow:none; background:#1f2127;">
+            <div class="matrix">
+              <div class="matrix-cell">
+                <h3 class="accent-red">Без раннера</h3>
+                <p>Один длинный prompt, неочевидная граница готовности, трудно понять, что уже проверено и где агент остановился.</p>
+              </div>
+              <div class="matrix-cell">
+                <h3 class="accent-green">С gigalphex</h3>
+                <p>План является контрактом, progress log является следом, а git-коммиты фиксируют атомарные результаты.</p>
+              </div>
+              <div class="matrix-cell">
+                <h3 class="accent-orange">Риск</h3>
+                <p>Агент может уйти в соседнюю задачу, оставить грязное дерево или принять ложное ревью-замечание.</p>
+              </div>
+              <div class="matrix-cell">
+                <h3 class="accent-blue">Контроль</h3>
+                <p>Выбор ровно одной задачи, dirty guard, retry guard, structured findings и независимая проверка synthesis-фазой.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Пайплайн">
+      <div class="slide-frame wide">
+        <div>
+          <p class="kicker">Основной сценарий</p>
+          <h2>Пайплайн выглядит как маленькая CI-система для агентской разработки</h2>
+          <p class="lead">Каждая фаза имеет собственный prompt, модель, лимиты, логику retry и ожидания по результату.</p>
+        </div>
+        <div class="pipeline" aria-label="gigalphex pipeline">
+          <article class="pipeline-step">
+            <span class="step-index">1</span>
+            <h3>Plan</h3>
+            <p>Создать или прочитать markdown-план в `docs/plans/`.</p>
+          </article>
+          <article class="pipeline-step">
+            <span class="step-index">2</span>
+            <h3>Task loop</h3>
+            <p>Выбрать первый незавершенный `Task` или `Задача`.</p>
+          </article>
+          <article class="pipeline-step">
+            <span class="step-index">3</span>
+            <h3>Validate + commit</h3>
+            <p>Выполнить код, тесты, чекбоксы и атомарный коммит.</p>
+          </article>
+          <article class="pipeline-step">
+            <span class="step-index">4</span>
+            <h3>Review fan-out</h3>
+            <p>Запустить пять read-only review-агентов параллельно.</p>
+          </article>
+          <article class="pipeline-step">
+            <span class="step-index">5</span>
+            <h3>Synthesis + finalize</h3>
+            <p>Проверить claims, исправить подтвержденное, закрыть прогон.</p>
+          </article>
+        </div>
+        <div class="talk-time">1:45 - 2:45</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="План">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">План как контракт</p>
+          <h2>Главный артефакт - markdown-план с чекбоксами</h2>
+          <p class="lead">Runner понимает английские и русские заголовки: `Task`, `Iteration`, `Задача`, `Итерация`. Это важно для локальных команд, где планы пишутся на русском, но исполняются тем же механизмом.</p>
+          <ul class="bullets">
+            <li>Выполняется только первый незакрытый task-раздел.</li>
+            <li>Поздние задачи нельзя отмечать или менять раньше времени.</li>
+            <li>Чекбокс `[x]` разрешен только после реализации и проверки.</li>
+            <li>При retry план возвращается к снимку начала итерации.</li>
+          </ul>
+          <div class="talk-time">2:45 - 3:45</div>
+        </div>
+        <div class="ide-panel plan-visual">
+          <div class="ide-tabs">
+            <div class="tab active"><span class="file-dot"></span>20260701-feature.md</div>
+          </div>
+          <div class="plan-body">
+            <div class="plan-row">
+              <span class="checkbox done">✓</span>
+              <span class="row-label">Задача 1: подготовить конфигурацию</span>
+              <span class="row-tag">done</span>
+            </div>
+            <div class="plan-row">
+              <span class="checkbox next"></span>
+              <span class="row-label">Задача 2: реализовать поведение</span>
+              <span class="row-tag active">selected</span>
+            </div>
+            <div class="plan-row">
+              <span class="checkbox"></span>
+              <span class="row-label">Добавить или обновить тесты</span>
+              <span class="row-tag active">scope</span>
+            </div>
+            <div class="plan-row">
+              <span class="checkbox"></span>
+              <span class="row-label">Запустить validation-команды</span>
+              <span class="row-tag active">scope</span>
+            </div>
+            <div class="plan-row">
+              <span class="checkbox"></span>
+              <span class="row-label">Задача 3: документация и polish</span>
+              <span class="row-tag">locked</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Исполнение">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Task execution</p>
+          <h2>Одна итерация - один контролируемый агентский запуск</h2>
+          <p class="lead">gigalphex не пытается заменить интеллект GigaCode. Он задает жесткий контракт вокруг запуска: scope, validation, commit, отсутствие новых незакоммиченных изменений.</p>
+          <div class="feature-grid">
+            <article class="feature-tile">
+              <div class="feature-icon">S</div>
+              <h3>Scope lock</h3>
+              <p>В prompt передается выбранный task-раздел и запрет работать с поздними задачами.</p>
+            </article>
+            <article class="feature-tile">
+              <div class="feature-icon">V</div>
+              <h3>Validation</h3>
+              <p>Агент обязан выполнить релевантные проверки перед закрытием чекбоксов.</p>
+            </article>
+            <article class="feature-tile">
+              <div class="feature-icon">G</div>
+              <h3>Git commit</h3>
+              <p>Готовая итерация должна оставить коммит и чистое рабочее дерево.</p>
+            </article>
+            <article class="feature-tile">
+              <div class="feature-icon">R</div>
+              <h3>Retry guard</h3>
+              <p>Транзиентные ошибки и rate limits обрабатываются отдельно от настоящего failure.</p>
+            </article>
+            <article class="feature-tile">
+              <div class="feature-icon">L</div>
+              <h3>Progress log</h3>
+              <p>Лог пишет lifecycle событий без утечки содержимого prompt.</p>
+            </article>
+            <article class="feature-tile">
+              <div class="feature-icon">T</div>
+              <h3>Statistics</h3>
+              <p>JSON рядом с логом хранит время, модели, токены и статус прогона.</p>
+            </article>
+          </div>
+          <div class="talk-time">3:45 - 5:00</div>
+        </div>
+        <div class="terminal-panel">
+          <div class="terminal-title">
+            <span>.gigalphex/progress/progress-feature.txt</span>
+            <span class="accent-green">stream-json</span>
+          </div>
+          <div class="terminal-lines">
+            <div><span class="terminal-muted">$</span> gigalphex docs/plans/feature.md</div>
+            <div>section: task iteration 2: implement behavior</div>
+            <div>session=task event=prepared prompt_chars=8120</div>
+            <div>session=task event=first_output pid=48213</div>
+            <div><code>feat: implement selected task</code></div>
+            <div>session=task event=finished returncode=0</div>
+            <div><span class="accent-cyan"><<<GIGALPHEX:ALL_TASKS_DONE>>></span></div>
+            <div class="terminal-muted">statistics: .gigalphex/progress/stats-feature.json</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Review">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Quality gate</p>
+          <h2>Ревью - это параллельная команда специалистов</h2>
+          <p class="lead">По умолчанию запускаются пять read-only review-агентов. Они возвращают машинно-валидируемые findings, а synthesis-фаза независимо проверяет claims и только потом исправляет код.</p>
+          <ul class="bullets">
+            <li>`quality` ищет баги, регрессии и безопасность.</li>
+            <li>`implementation` проверяет соответствие требованиям и архитектуре.</li>
+            <li>`testing` фокусируется на тестах и validation gaps.</li>
+            <li>`simplification` ловит лишнюю сложность.</li>
+            <li>`documentation` смотрит docs, comments и user-facing изменения.</li>
+          </ul>
+          <div class="talk-time">5:00 - 6:05</div>
+        </div>
+        <div>
+          <div class="review-ring" aria-label="parallel review agents">
+            <div class="review-core">review synthesis<br><span class="accent-green">verify + fix</span></div>
+            <div class="agent-node"><strong>quality</strong>bugs, regressions</div>
+            <div class="agent-node"><strong>implementation</strong>requirements</div>
+            <div class="agent-node"><strong>testing</strong>coverage gaps</div>
+            <div class="agent-node"><strong>simplification</strong>complexity</div>
+            <div class="agent-node"><strong>documentation</strong>docs impact</div>
+          </div>
+          <div class="mobile-stack">
+            <div class="mini-panel"><h3>quality</h3><p>bugs, regressions, security.</p></div>
+            <div class="mini-panel"><h3>implementation</h3><p>requirements and architecture.</p></div>
+            <div class="mini-panel"><h3>testing</h3><p>coverage and validation.</p></div>
+            <div class="mini-panel"><h3>simplification</h3><p>unnecessary complexity.</p></div>
+            <div class="mini-panel"><h3>documentation</h3><p>docs and user-facing text.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Git и надежность">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Operational controls</p>
+          <h2>Проект заботится о рабочем дереве, ветках и корпоративных правилах</h2>
+          <p class="lead">Это особенно важно для реальных задач, где запуск агента должен уважать текущую ветку, Jira-префиксы, worktree-изоляцию и политику dirty working tree.</p>
+          <div class="split-list">
+            <div class="mini-panel">
+              <h3>Git hygiene</h3>
+              <p>Создание или переключение ветки из имени плана, запрет dirty tree по умолчанию, перенос завершенных планов в `completed/`.</p>
+            </div>
+            <div class="mini-panel">
+              <h3>Worktree mode</h3>
+              <p>`--worktree` запускает выполнение в `.gigalphex/worktrees/&lt;branch&gt;`, не дергая текущий checkout.</p>
+            </div>
+            <div class="mini-panel">
+              <h3>Jira policy</h3>
+              <p>`--jira-task PROJ-123` навязывает `feature/PROJ-123-...` и префикс commit subject.</p>
+            </div>
+            <div class="mini-panel">
+              <h3>Timeouts and retries</h3>
+              <p>Session timeout, idle timeout, retry patterns, rate limit patterns и ожидание перед повтором.</p>
+            </div>
+          </div>
+          <div class="talk-time">6:05 - 7:10</div>
+        </div>
+        <div class="terminal-panel">
+          <div class="terminal-title">
+            <span>workflow.sh</span>
+            <span class="accent-orange">real task</span>
+          </div>
+          <div class="terminal-lines">
+            <div><span class="terminal-muted"># подготовка</span></div>
+            <div>gigalphex --init</div>
+            <div>gigalphex --install-planning-skill</div>
+            <br>
+            <div><span class="terminal-muted"># план</span></div>
+            <div>gigalphex --plan "добавить health check endpoint"</div>
+            <br>
+            <div><span class="terminal-muted"># исполнение</span></div>
+            <div>gigalphex docs/plans/health-check.md --jira-task PROJ-123</div>
+            <br>
+            <div><span class="terminal-muted"># отдельная проверка</span></div>
+            <div>gigalphex --review --base-ref develop</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Конфигурация">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Настраиваемость</p>
+          <h2>Все важные границы вынесены в конфиг, env и CLI flags</h2>
+          <p class="lead">gigalphex не требует “магического” SDK. Его контракт - командная строка GigaCode и набор настраиваемых prompt templates.</p>
+          <ul class="bullets">
+            <li>Приоритет: embedded defaults, global config, project config, explicit config, `GIGALPHEX_*`, CLI.</li>
+            <li>Для фаз можно выбрать разные модели: plan, task, review, finalize.</li>
+            <li>Prompt overrides лежат глобально или локально в `.gigalphex/prompts/`.</li>
+            <li>`--gigacode-arg` прокидывает существующие флаги GigaCode в каждый запуск.</li>
+          </ul>
+          <div class="talk-time">7:10 - 8:00</div>
+        </div>
+        <div class="ide-panel">
+          <div class="ide-tabs">
+            <div class="tab active"><span class="file-dot"></span>.gigalphex/config</div>
+          </div>
+          <div class="editor">
+            <div class="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</div>
+            <div class="code-lines">
+              <div class="code-line"><span class="token-key">[gigalphex]</span></div>
+              <div class="code-line">gigacode_command = <span class="token-str">gigacode</span></div>
+              <div class="code-line">gigacode_args = <span class="token-str">auto-edit + shell</span></div>
+              <div class="code-line">task_model = <span class="token-str">&lt;model&gt;</span></div>
+              <div class="code-line">review_model = <span class="token-str">&lt;model&gt;</span></div>
+              <div class="code-line">review_workers = <span class="token-warn">5</span></div>
+              <div class="code-line">session_timeout = <span class="token-warn">1800</span></div>
+              <div class="code-line">worktree = <span class="token-key">false</span></div>
+              <div class="code-line">move_plan_on_completion = <span class="token-key">true</span></div>
+              <div class="code-line">commit_plan_on_creation = <span class="token-key">true</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Сосуществование">
+      <div class="slide-frame wide">
+        <div>
+          <p class="kicker">Как жить рядом с существующей инфраструктурой</p>
+          <h2>gigalphex не заменяет настроенный GigaCode-стек. Он становится внешним оркестратором.</h2>
+          <p class="lead">Смысл интеграции: оставить внутри GigaCode уже настроенные доступы, sandbox, tools, subagents и custom skills, а наружу добавить воспроизводимый жизненный цикл задачи.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-tile">
+            <div class="feature-icon">C</div>
+            <h3>CLI boundary</h3>
+            <p>Вызов идет через `gigacode` в `PATH`. Auth, workspace, approvals и sandbox остаются на стороне GigaCode.</p>
+          </article>
+          <article class="feature-tile">
+            <div class="feature-icon">A</div>
+            <h3>Subagents inside</h3>
+            <p>Если в GigaCode уже настроены внутренние subagents, они продолжают работать внутри task/review/finalize-сессий.</p>
+          </article>
+          <article class="feature-tile">
+            <div class="feature-icon">S</div>
+            <h3>Custom skills</h3>
+            <p>Собственные skills остаются в каталоге GigaCode. `--skill-dir` позволяет явно указать нужное место.</p>
+          </article>
+          <article class="feature-tile">
+            <div class="feature-icon">P</div>
+            <h3>Planning skill</h3>
+            <p>Встроенный skill нужен только для интерактивного создания планов и ставится как обычный GigaCode skill.</p>
+          </article>
+          <article class="feature-tile">
+            <div class="feature-icon">M</div>
+            <h3>Models per phase</h3>
+            <p>План, задачи, read-only review, synthesis и finalize можно вести разными моделями.</p>
+          </article>
+          <article class="feature-tile">
+            <div class="feature-icon">I</div>
+            <h3>Existing flags</h3>
+            <p>`--gigacode-arg` прокидывает корпоративные настройки, например include-directories или ограничения tools.</p>
+          </article>
+        </div>
+        <div class="talk-time">8:00 - 9:20</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Финал">
+      <div class="slide-frame">
+        <div>
+          <p class="kicker">Итог</p>
+          <h2>Главная идея: агентская разработка становится <span class="accent-cyan">проверяемым процессом</span></h2>
+          <p class="lead">gigalphex дает простой продуктовый слой вокруг GigaCode: план как контракт, progress log как наблюдаемость, Git как журнал решений, review-агенты как quality gate.</p>
+          <ul class="bullets">
+            <li>Для разработчика: меньше ручной координации и больше прозрачности.</li>
+            <li>Для команды: повторяемый сценарий запуска на реальных задачах.</li>
+            <li>Для инфраструктуры: совместимость через существующий GigaCode CLI и skills.</li>
+          </ul>
+          <div class="talk-time">9:20 - 10:00</div>
+        </div>
+        <div class="terminal-panel">
+          <div class="terminal-title">
+            <span>success.state</span>
+            <span class="accent-green">done</span>
+          </div>
+          <div class="terminal-lines">
+            <div><span class="accent-green">✓</span> plan sections completed</div>
+            <div><span class="accent-green">✓</span> task commits created</div>
+            <div><span class="accent-green">✓</span> review claims normalized</div>
+            <div><span class="accent-green">✓</span> synthesis verified findings</div>
+            <div><span class="accent-green">✓</span> finalize left clean tree</div>
+            <br>
+            <div><span class="terminal-muted">artifact:</span> docs/plans/completed/feature.md</div>
+            <div><span class="terminal-muted">artifact:</span> .gigalphex/progress/stats-feature.json</div>
+            <br>
+            <div><span class="accent-cyan"><<<GIGALPHEX:FINALIZE_DONE>>></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="bottom-bar" aria-hidden="true">
+      <div class="nav">
+        <button class="icon-button" id="prev" title="Предыдущий слайд" aria-label="Предыдущий слайд">‹</button>
+        <button class="icon-button" id="next" title="Следующий слайд" aria-label="Следующий слайд">›</button>
+      </div>
+      <div class="progress"><div class="progress-fill"></div></div>
+      <div class="counter" id="counter">01 / 10</div>
+    </div>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const counter = document.getElementById("counter");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    let index = 0;
+    let fitFrame = 0;
+
+    function fitActiveSlide() {
+      const active = slides[index];
+      const frame = active.querySelector(".slide-frame");
+      if (!frame) {
+        return;
+      }
+
+      frame.style.setProperty("--slide-scale", "1");
+
+      window.cancelAnimationFrame(fitFrame);
+      fitFrame = window.requestAnimationFrame(() => {
+        const styles = window.getComputedStyle(active);
+        const availableWidth = active.clientWidth
+          - Number.parseFloat(styles.paddingLeft)
+          - Number.parseFloat(styles.paddingRight);
+        const availableHeight = active.clientHeight
+          - Number.parseFloat(styles.paddingTop)
+          - Number.parseFloat(styles.paddingBottom);
+        const naturalWidth = Math.max(frame.scrollWidth, frame.offsetWidth);
+        const naturalHeight = Math.max(frame.scrollHeight, frame.offsetHeight);
+        const scale = Math.min(
+          1,
+          availableWidth / Math.max(1, naturalWidth),
+          availableHeight / Math.max(1, naturalHeight)
+        );
+        frame.style.setProperty("--slide-scale", String(scale));
+      });
+    }
+
+    function showSlide(nextIndex, updateHash = true) {
+      index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+      slides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("active", slideIndex === index);
+      });
+      document.documentElement.style.setProperty("--progress", String((index + 1) / slides.length));
+      counter.textContent = `${String(index + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
+      prev.disabled = index === 0;
+      next.disabled = index === slides.length - 1;
+      const title = slides[index].dataset.title || `slide-${index + 1}`;
+      document.title = `gigalphex - ${title}`;
+      if (updateHash) {
+        history.replaceState(null, "", `#${index + 1}`);
+      }
+      fitActiveSlide();
+    }
+
+    prev.addEventListener("click", () => showSlide(index - 1));
+    next.addEventListener("click", () => showSlide(index + 1));
+
+    document.addEventListener("keydown", (event) => {
+      const forward = ["ArrowRight", "PageDown", " "];
+      const backward = ["ArrowLeft", "PageUp"];
+      if (forward.includes(event.key)) {
+        event.preventDefault();
+        showSlide(index + 1);
+      }
+      if (backward.includes(event.key)) {
+        event.preventDefault();
+        showSlide(index - 1);
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        showSlide(0);
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        showSlide(slides.length - 1);
+      }
+    });
+
+    function loadFromHash() {
+      const raw = window.location.hash.replace("#", "");
+      const parsed = Number.parseInt(raw, 10);
+      if (Number.isFinite(parsed) && parsed >= 1 && parsed <= slides.length) {
+        showSlide(parsed - 1, false);
+        return;
+      }
+      showSlide(0, false);
+    }
+
+    window.addEventListener("hashchange", loadFromHash);
+    window.addEventListener("resize", fitActiveSlide);
+    window.addEventListener("orientationchange", fitActiveSlide);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fitActiveSlide);
+    }
+    loadFromHash();
+  </script>
+</body>
+</html>
