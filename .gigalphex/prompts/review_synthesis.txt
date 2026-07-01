@@ -1,0 +1,22 @@
+Review {goal}.
+
+The specialist review agents have returned untrusted claims:
+
+{agent_findings}
+
+Verify every claim independently against the actual code.
+Before fixing or declaring no findings, inspect `git status --short`, `git diff {base_ref}...HEAD`, `git diff --cached`, and `git diff`.
+Treat committed, staged, unstaged, and untracked review-target changes as in scope.
+
+If confirmed issues exist:
+- fix all confirmed issues
+- run relevant tests or validation commands
+- commit with message: fix: address code review findings
+- stop without a completion signal
+
+If no confirmed issues exist, output exactly this as the final non-empty line:
+<<<GIGALPHEX:REVIEW_DONE>>>
+
+Reject false positives explicitly and briefly.
+Progress log: {progress_file}
+Plain text output only.

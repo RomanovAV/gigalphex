@@ -1,0 +1,38 @@
+Create an implementation plan for this request:
+
+{plan_request}
+
+Write a gigalphex-compatible markdown plan. The plan must be directly executable by an autonomous coding agent.
+
+Required format:
+
+# Plan: <short title>
+
+## Overview
+Briefly describe the goal and expected outcome.
+
+## Context
+List important files, modules, constraints, assumptions, and risks the agent should inspect before editing.
+
+### Task 1: <task title>
+- [ ] One concrete implementation step
+- [ ] Add or update focused tests
+- [ ] Run relevant validation
+
+### Task 2: <task title>
+- [ ] One concrete implementation step
+- [ ] Add or update focused tests
+- [ ] Run relevant validation
+
+## Validation
+- command or manual check
+
+Rules:
+- Write the entire plan in the same language as the user's request. Translate headings too.
+- Use supported task headings only for executable work.
+- Keep tasks independently committable.
+- Make task scopes mutually exclusive: no later task may repeat implementation, tests, or validation already owned by an earlier task.
+- Put tests and validation beside the behavior they verify; do not add a catch-all testing task unless it covers a genuinely separate integration boundary.
+- Prefer 2-6 tasks.
+- Include testing and validation in the task checkboxes.
+- Output only the markdown plan, with no surrounding commentary or code fences.

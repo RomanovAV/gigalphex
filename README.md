@@ -62,10 +62,20 @@ Install the bundled planning skill once:
 PYTHONPATH=python python3 -m gigalphex.cli --install-planning-skill
 ```
 
+Install the bundled Superpowers conversion skill when you want to turn
+Superpowers specs or plans into executable GigaLphex plans:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli --install-superpowers-converter-skill
+```
+
 The default destination is `~/.gigacode/skills/planning/SKILL.md`. Existing
 customized content is preserved; use `--force-skill-install` to replace it
 with the bundled version. For a GigaCode version using another skills
 directory, pass `--skill-dir PATH` or configure `gigacode_skills_dir`.
+The converter skill is installed as
+`~/.gigacode/skills/superpowers-to-gigalphex/SKILL.md` and follows the same
+overwrite rules.
 
 Specialist and single-review sessions use `review_model`, keep the configured
 shell approval arguments, and receive an explicit inspect-only prompt. Keeping
@@ -339,13 +349,24 @@ Prompt customization:
   `review_agent.txt`, `review_synthesis.txt`, and `finalize.txt`
 - loading priority is local prompts directory, then `~/.config/gigalphex/prompts`, then embedded defaults
 
-Planning skill:
+Bundled skills:
 
 - `--install-planning-skill` installs the bundled skill globally
+- `--install-superpowers-converter-skill` installs the bundled
+  `superpowers-to-gigalphex` skill for converting `docs/superpowers/specs/`
+  and `docs/superpowers/plans/` artifacts into `docs/plans/` files executable
+  by GigaLphex
 - `--skill-dir PATH` overrides the configured GigaCode skills directory
-- `--force-skill-install` replaces an existing modified skill
+- `--force-skill-install` replaces an existing modified bundled skill
 - interactive `--plan` checks for `<skills-dir>/planning/SKILL.md` before
   launching GigaCode and suggests `--quick` when the skill is unavailable
+
+After installing the converter skill, use it from an interactive GigaCode
+session, for example:
+
+```text
+Use the superpowers-to-gigalphex skill to convert docs/superpowers/specs/2026-07-01--demo.md into docs/plans/demo.md.
+```
 
 Model selection:
 

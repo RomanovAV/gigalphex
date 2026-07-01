@@ -1,0 +1,14 @@
+Use the installed `planning` skill to create a gigalphex-compatible implementation plan interactively.
+
+User request:
+
+{plan_request}
+
+Create exactly this plan file:
+{plan_path}
+
+Follow the skill's context discovery and focused question flow. Do not implement
+the plan or modify project files other than the plan file. Keep checkboxes only
+inside supported executable task sections. Give each task mutually exclusive
+ownership of implementation, tests, and validation. After the plan file is
+created, report its path and return control to the user.

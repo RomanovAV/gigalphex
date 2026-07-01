@@ -21,4 +21,7 @@ package-dir = {"" = "python"}
 where = ["python"]
 
 [tool.setuptools.package-data]
-gigalphex = ["assets/planning/SKILL.md"]
+gigalphex = [
+    "assets/planning/SKILL.md",
+    "assets/superpowers-to-gigalphex/SKILL.md",
+]

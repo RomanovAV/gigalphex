@@ -26,7 +26,12 @@ from .planner import clean_plan_output, next_plan_path
 from .progress import ProgressLog
 from .prompts import load_prompt_templates, render_make_plan, render_plan_skill
 from .runner import RunOptions, Runner
-from .skills import install_planning_skill, planning_skill_installed, planning_skill_path
+from .skills import (
+    install_planning_skill,
+    install_superpowers_converter_skill,
+    planning_skill_installed,
+    planning_skill_path,
+)
 from .stats import RunStatistics, statistics_path
 
 
@@ -51,9 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="install the bundled planning skill for GigaCode",
     )
     parser.add_argument(
+        "--install-superpowers-converter-skill",
+        action="store_true",
+        help="install the bundled Superpowers-to-GigaLphex conversion skill for GigaCode",
+    )
+    parser.add_argument(
         "--force-skill-install",
         action="store_true",
-        help="overwrite an existing modified planning skill",
+        help="overwrite an existing modified bundled skill",
     )
     parser.add_argument(
         "--skill-dir",
@@ -260,8 +270,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
     else:
         args.jira_task = ""
-    if args.force_skill_install and not args.install_planning_skill:
-        print("error: --force-skill-install requires --install-planning-skill", file=sys.stderr)
+    install_skill_requested = (
+        args.install_planning_skill or args.install_superpowers_converter_skill
+    )
+    if args.force_skill_install and not install_skill_requested:
+        print(
+            "error: --force-skill-install requires a bundled skill install command",
+            file=sys.stderr,
+        )
         return 2
     if args.quick and not args.plan:
         print("error: --quick requires --plan", file=sys.stderr)
@@ -340,6 +356,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         and not args.plan_file
         and not args.review
         and not args.install_planning_skill
+        and not args.install_superpowers_converter_skill
     ):
         return 0
 
@@ -406,23 +423,29 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.finalize is not None:
         cfg.finalize_enabled = args.finalize
 
-    if args.install_planning_skill:
-        try:
-            skill_path, written = install_planning_skill(
-                cfg.gigacode_skills_dir,
-                force=args.force_skill_install,
-            )
-        except FileExistsError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            print("re-run with --force-skill-install to overwrite it", file=sys.stderr)
-            return 1
-        except OSError as exc:
-            print(f"error: could not install planning skill: {exc}", file=sys.stderr)
-            return 1
-        if written:
-            print(f"installed planning skill: {skill_path}")
-        else:
-            print(f"planning skill already installed: {skill_path}")
+    if install_skill_requested:
+        installers = []
+        if args.install_planning_skill:
+            installers.append(("planning", install_planning_skill))
+        if args.install_superpowers_converter_skill:
+            installers.append(("superpowers-to-gigalphex", install_superpowers_converter_skill))
+        for name, installer in installers:
+            try:
+                skill_path, written = installer(
+                    cfg.gigacode_skills_dir,
+                    force=args.force_skill_install,
+                )
+            except FileExistsError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                print("re-run with --force-skill-install to overwrite it", file=sys.stderr)
+                return 1
+            except OSError as exc:
+                print(f"error: could not install {name} skill: {exc}", file=sys.stderr)
+                return 1
+            if written:
+                print(f"installed {name} skill: {skill_path}")
+            else:
+                print(f"{name} skill already installed: {skill_path}")
         return 0
 
     if args.plan:

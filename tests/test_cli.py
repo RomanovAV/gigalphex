@@ -688,6 +688,29 @@ target.write_text("# Plan: Demo\\n\\n### Task 1: Build\\n- [ ] Do it\\n")
             self.assertIn("name: planning", skill.read_text(encoding="utf-8"))
             self.assertIn(f"installed planning skill: {skill}", stdout.getvalue())
 
+    def test_install_superpowers_converter_skill_to_explicit_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            home = tmp_path / "home"
+            skills_dir = tmp_path / "skills"
+            stdout = io.StringIO()
+
+            with patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(stdout):
+                code = main([
+                    "--install-superpowers-converter-skill",
+                    "--skill-dir",
+                    str(skills_dir),
+                ])
+
+            skill = skills_dir / "superpowers-to-gigalphex/SKILL.md"
+            self.assertEqual(0, code)
+            self.assertTrue(skill.is_file())
+            self.assertIn("name: superpowers-to-gigalphex", skill.read_text(encoding="utf-8"))
+            self.assertIn(
+                f"installed superpowers-to-gigalphex skill: {skill}",
+                stdout.getvalue(),
+            )
+
     def test_install_planning_skill_preserves_modified_existing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
