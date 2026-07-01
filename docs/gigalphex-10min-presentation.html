@@ -80,8 +80,8 @@
       display: grid;
       grid-template-columns: auto 1fr auto;
       align-items: center;
-      min-height: 48px;
-      padding: 0 20px;
+      min-height: 40px;
+      padding: 0 16px;
       background: #24262c;
       border-bottom: 1px solid #15161a;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
@@ -136,9 +136,9 @@
 
     .slide {
       position: absolute;
-      inset: 48px 0 34px;
+      inset: 40px 0 28px;
       display: none;
-      padding: 44px 56px 42px;
+      padding: 24px 34px 26px;
       overflow: hidden;
     }
 
@@ -151,11 +151,11 @@
     .slide-frame {
       position: relative;
       z-index: 1;
-      width: min(1180px, 100%);
+      width: min(1220px, 100%);
       margin: 0 auto;
       display: grid;
       grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
-      gap: 34px;
+      gap: 26px;
       align-items: center;
       transform: scale(var(--slide-scale));
       transform-origin: center center;
@@ -170,7 +170,7 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin: 0 0 18px;
+      margin: 0 0 12px;
       color: var(--cyan);
       font-family: var(--mono);
       font-size: 13px;
@@ -196,21 +196,21 @@
     }
 
     h1 {
-      font-size: 56px;
+      font-size: 52px;
       max-width: 780px;
     }
 
     h2 {
-      font-size: 42px;
+      font-size: 38px;
       max-width: 790px;
     }
 
     .lead {
-      margin: 20px 0 0;
+      margin: 14px 0 0;
       max-width: 780px;
       color: var(--muted);
-      font-size: 20px;
-      line-height: 1.52;
+      font-size: 19px;
+      line-height: 1.38;
     }
 
     .headline-emphasis {
@@ -228,8 +228,8 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin-top: 24px;
-      padding: 7px 10px;
+      margin-top: 16px;
+      padding: 6px 9px;
       border: 1px solid var(--line);
       border-radius: 6px;
       color: var(--muted);
@@ -248,8 +248,8 @@
 
     .bullets {
       display: grid;
-      gap: 13px;
-      margin-top: 28px;
+      gap: 10px;
+      margin-top: 20px;
       padding: 0;
       list-style: none;
     }
@@ -258,8 +258,8 @@
       position: relative;
       padding-left: 24px;
       color: var(--muted);
-      font-size: 19px;
-      line-height: 1.44;
+      font-size: 18px;
+      line-height: 1.34;
     }
 
     .bullets li::before {
@@ -292,7 +292,7 @@
 
     .ide-tabs {
       display: flex;
-      min-height: 38px;
+      min-height: 34px;
       border-bottom: 1px solid #191b1f;
       background: #2b2d33;
     }
@@ -327,15 +327,15 @@
     .editor {
       display: grid;
       grid-template-columns: 42px 1fr;
-      min-height: 330px;
+      min-height: 292px;
       background: #1f2127;
       font-family: var(--mono);
-      font-size: 15px;
-      line-height: 1.85;
+      font-size: 14px;
+      line-height: 1.68;
     }
 
     .line-numbers {
-      padding: 18px 8px 18px 0;
+      padding: 14px 8px 14px 0;
       color: #626977;
       text-align: right;
       user-select: none;
@@ -344,7 +344,7 @@
     }
 
     .code-lines {
-      padding: 18px 22px;
+      padding: 14px 18px;
       color: #c9d1dc;
       overflow: hidden;
     }
@@ -364,13 +364,13 @@
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
-      margin-top: 34px;
+      margin-top: 22px;
     }
 
     .pipeline-step {
       position: relative;
-      min-height: 142px;
-      padding: 14px 12px;
+      min-height: 118px;
+      padding: 12px 11px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #252830;
@@ -379,8 +379,8 @@
     .step-index {
       display: inline-grid;
       place-items: center;
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       color: #101317;
       font-family: var(--mono);
@@ -397,8 +397,8 @@
     .pipeline-step h3,
     .matrix-cell h3,
     .feature-tile h3 {
-      margin: 14px 0 8px;
-      font-size: 17px;
+      margin: 10px 0 6px;
+      font-size: 16px;
       line-height: 1.25;
       color: var(--text);
     }
@@ -408,34 +408,34 @@
     .feature-tile p {
       margin: 0;
       color: var(--muted);
-      font-size: 14px;
-      line-height: 1.42;
+      font-size: 13px;
+      line-height: 1.32;
     }
 
     .feature-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 34px;
+      gap: 10px;
+      margin-top: 22px;
     }
 
     .feature-tile {
-      min-height: 150px;
-      padding: 16px;
+      min-height: 108px;
+      padding: 12px;
       border: 1px solid var(--line-soft);
       border-radius: 8px;
       background: #252830;
     }
 
     .feature-icon {
-      width: 34px;
-      height: 34px;
+      width: 28px;
+      height: 28px;
       border-radius: 8px;
       display: grid;
       place-items: center;
       color: #111418;
       font-family: var(--mono);
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 800;
       background: var(--blue);
     }
@@ -452,8 +452,8 @@
 
     .plan-body {
       display: grid;
-      gap: 10px;
-      padding: 20px;
+      gap: 8px;
+      padding: 16px;
       background: #1f2127;
       font-family: var(--mono);
     }
@@ -463,7 +463,7 @@
       grid-template-columns: 28px 1fr auto;
       gap: 10px;
       align-items: center;
-      min-height: 34px;
+      min-height: 30px;
       color: var(--muted);
       font-size: 14px;
     }
@@ -513,7 +513,7 @@
 
     .review-ring {
       position: relative;
-      width: min(440px, 100%);
+      width: min(390px, 100%);
       aspect-ratio: 1 / 1;
       margin: 0 auto;
       display: grid;
@@ -521,8 +521,8 @@
     }
 
     .review-core {
-      width: 150px;
-      height: 150px;
+      width: 132px;
+      height: 132px;
       border-radius: 8px;
       display: grid;
       place-items: center;
@@ -537,9 +537,9 @@
 
     .agent-node {
       position: absolute;
-      width: 132px;
-      min-height: 72px;
-      padding: 10px;
+      width: 124px;
+      min-height: 64px;
+      padding: 9px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #252830;
@@ -564,18 +564,18 @@
     .agent-node:nth-child(6) { top: 30%; left: 0; border-color: rgba(66,217,200,0.55); }
 
     .matrix-panel {
-      padding: 18px;
+      padding: 14px;
     }
 
     .matrix {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
     }
 
     .matrix-cell {
-      min-height: 130px;
-      padding: 16px;
+      min-height: 108px;
+      padding: 13px;
       border-radius: 8px;
       border: 1px solid var(--line-soft);
       background: #252830;
@@ -594,8 +594,8 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      min-height: 38px;
-      padding: 0 14px;
+      min-height: 34px;
+      padding: 0 12px;
       border-bottom: 1px solid #2a2e36;
       background: #202329;
       color: var(--muted);
@@ -604,10 +604,10 @@
     }
 
     .terminal-lines {
-      padding: 18px 20px;
+      padding: 14px 16px;
       font-family: var(--mono);
-      font-size: 14px;
-      line-height: 1.75;
+      font-size: 13px;
+      line-height: 1.56;
       color: #cdd5e0;
       overflow: hidden;
     }
@@ -621,39 +621,107 @@
       color: #737c8a;
     }
 
+    .links-panel {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(37, 39, 45, 0.92);
+      box-shadow: var(--shadow);
+    }
+
+    .links-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .qr-card {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #252830;
+    }
+
+    .qr-card h3 {
+      margin: 0;
+      color: var(--text);
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .qr-code {
+      width: min(100%, 178px);
+      aspect-ratio: 1 / 1;
+      justify-self: center;
+      border-radius: 6px;
+      background: #f6f7f9;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .qr-link {
+      color: var(--blue);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.32;
+      overflow-wrap: anywhere;
+      text-decoration: none;
+    }
+
+    .qr-link:hover,
+    .qr-link:focus-visible {
+      color: var(--cyan);
+      outline: none;
+      text-decoration: underline;
+    }
+
     .split-list {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 28px;
+      gap: 10px;
+      margin-top: 20px;
     }
 
     .mini-panel {
-      min-height: 156px;
-      padding: 16px;
+      min-height: 112px;
+      padding: 13px;
       border: 1px solid var(--line-soft);
       border-radius: 8px;
       background: #252830;
     }
 
     .mini-panel h3 {
-      margin: 0 0 12px;
-      font-size: 17px;
+      margin: 0 0 8px;
+      font-size: 16px;
       color: var(--text);
     }
 
     .mini-panel p {
       margin: 0;
       color: var(--muted);
-      font-size: 15px;
-      line-height: 1.46;
+      font-size: 14px;
+      line-height: 1.34;
     }
 
     .tag-line {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      margin-top: 22px;
+      margin-top: 16px;
     }
 
     .tag {
@@ -679,12 +747,12 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: 34px;
+      height: 28px;
       display: grid;
       grid-template-columns: auto 1fr auto;
       align-items: center;
-      gap: 14px;
-      padding: 0 16px;
+      gap: 12px;
+      padding: 0 14px;
       background: #24262c;
       border-top: 1px solid #15161a;
     }
@@ -695,8 +763,8 @@
     }
 
     .icon-button {
-      width: 26px;
-      height: 24px;
+      width: 24px;
+      height: 22px;
       display: grid;
       place-items: center;
       color: var(--muted);
@@ -754,9 +822,9 @@
 
       .slide {
         position: absolute;
-        inset: 48px 0 34px;
+        inset: 40px 0 28px;
         display: none;
-        padding: 34px 24px 44px;
+        padding: 22px 26px 24px;
       }
 
       h1 { font-size: 42px; }
@@ -784,7 +852,7 @@
       }
 
       .slide {
-        padding: 28px 16px 40px;
+        padding: 20px 14px 22px;
       }
 
       .slide-frame,
@@ -1285,22 +1353,22 @@
           </ul>
           <div class="talk-time">9:20 - 10:00</div>
         </div>
-        <div class="terminal-panel">
-          <div class="terminal-title">
-            <span>success.state</span>
-            <span class="accent-green">done</span>
+        <div class="links-panel">
+          <div class="links-title">
+            <span>where-to-find.md</span>
+            <span class="accent-green">scan or click</span>
           </div>
-          <div class="terminal-lines">
-            <div><span class="accent-green">✓</span> plan sections completed</div>
-            <div><span class="accent-green">✓</span> task commits created</div>
-            <div><span class="accent-green">✓</span> review claims normalized</div>
-            <div><span class="accent-green">✓</span> synthesis verified findings</div>
-            <div><span class="accent-green">✓</span> finalize left clean tree</div>
-            <br>
-            <div><span class="terminal-muted">artifact:</span> docs/plans/completed/feature.md</div>
-            <div><span class="terminal-muted">artifact:</span> .gigalphex/progress/stats-feature.json</div>
-            <br>
-            <div><span class="accent-cyan"><<<GIGALPHEX:FINALIZE_DONE>>></span></div>
+          <div class="qr-grid">
+            <article class="qr-card">
+              <h3>Репозиторий</h3>
+              <img class="qr-code" src="assets/gigalphex-repo-qr.png" alt="QR: https://github.com/RomanovAV/gigalphex">
+              <a class="qr-link" href="https://github.com/RomanovAV/gigalphex" target="_blank" rel="noreferrer">github.com/RomanovAV/gigalphex</a>
+            </article>
+            <article class="qr-card">
+              <h3>Чат</h3>
+              <img class="qr-code" src="assets/gigalphex-chat-qr.png" alt="QR: https://sberchat.sberbank.ru/@gigalphex">
+              <a class="qr-link" href="https://sberchat.sberbank.ru/@gigalphex" target="_blank" rel="noreferrer">sberchat.sberbank.ru/@gigalphex</a>
+            </article>
           </div>
         </div>
       </div>
