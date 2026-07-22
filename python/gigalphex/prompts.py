@@ -82,7 +82,8 @@ Plain text output only.
 """
 
 TASK_FORMAT_GUIDANCE = """Plan format compatibility:
-- Treat `### Task N:`, `### Iteration N:`, `### Задача N:`, and `### Итерация N:` as equivalent executable task headings.
+- Treat level-two and level-three task headings as equivalent. Supported forms include `## Task N:` / `### Task N:`, `## Iteration N:` / `### Iteration N:`, `## Задача N:` / `### Задача N:`, and the corresponding `Iteration` / `Итерация` forms.
+- Superpowers implementation plans under `docs/superpowers/plans/` are directly executable; follow their selected task's `**Files:**`, `**Interfaces:**`, and step checkboxes as part of that task section.
 - Other structural headings may also be localized. In Russian plans, read `Обзор`, `Контекст`, and `Проверка` like `Overview`, `Context`, and `Validation`.
 """
 
@@ -169,7 +170,7 @@ created, report its path and return control to the user.
 PLAN_LOCALIZATION_GUIDANCE = """Plan localization compatibility:
 - English and Russian structural headings are both valid.
 - For a Russian request, the whole template may be translated, for example: `# План:`, `## Обзор`, `## Контекст`, `### Задача N:`, and `## Проверка`.
-- Executable task headings must use one of these forms consistently: `### Task N:`, `### Iteration N:`, `### Задача N:`, or `### Итерация N:`.
+- Executable task headings may use level two or level three consistently: `## Task N:` / `### Task N:`, `## Iteration N:` / `### Iteration N:`, or the equivalent Russian `Задача` / `Итерация` forms.
 """
 
 REVIEW_PROMPT = """You are the review agent.

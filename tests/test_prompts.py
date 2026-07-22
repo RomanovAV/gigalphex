@@ -61,7 +61,9 @@ class PromptTemplatesTest(unittest.TestCase):
         )
 
         self.assertIn("Выполни план docs/plans/demo.md.", prompt)
+        self.assertIn("`## Task N:` / `### Task N:`", prompt)
         self.assertIn("`### Задача N:`", prompt)
+        self.assertIn("Superpowers implementation plans", prompt)
         self.assertIn("`Контекст`", prompt)
 
     def test_default_task_prompt_defines_verifiable_success_contract(self) -> None:

@@ -4,8 +4,9 @@ Python autonomous plan runner for GigaCode CLI.
 
 This is a small standalone rewrite of the useful ralphex core:
 
-- parse English and Russian markdown plans with `### Task N:` /
-  `### Iteration N:` / `### Задача N:` / `### Итерация N:`
+- parse English and Russian markdown plans with level-two or level-three
+  `Task N:` / `Iteration N:` / `Задача N:` / `Итерация N:` headings
+- execute Superpowers `docs/superpowers/plans/*.md` implementation plans directly
 - run one task section per agent iteration
 - stream output to terminal and progress logs
 - detect gigalphex completion signals
@@ -62,8 +63,17 @@ Install the bundled planning skill once:
 PYTHONPATH=python python3 -m gigalphex.cli --install-planning-skill
 ```
 
-Install the bundled Superpowers conversion skill when you want to turn
-Superpowers specs or plans into executable GigaLphex plans:
+Superpowers implementation plans with `## Task N:` or `### Task N:` headings
+and step checkboxes can be executed directly:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli \
+  docs/superpowers/plans/2026-07-01-demo.md
+```
+
+Install the bundled Superpowers conversion skill when you want to turn a
+Superpowers design spec into a plan, or normalize a plan by removing
+Superpowers-specific execution mechanics:
 
 ```bash
 PYTHONPATH=python python3 -m gigalphex.cli --install-superpowers-converter-skill
@@ -353,9 +363,9 @@ Bundled skills:
 
 - `--install-planning-skill` installs the bundled skill globally
 - `--install-superpowers-converter-skill` installs the bundled
-  `superpowers-to-gigalphex` skill for converting `docs/superpowers/specs/`
-  and `docs/superpowers/plans/` artifacts into `docs/plans/` files executable
-  by GigaLphex
+  `superpowers-to-gigalphex` skill for turning `docs/superpowers/specs/` into
+  executable plans or normalizing `docs/superpowers/plans/` into `docs/plans/`;
+  implementation plans can also be executed directly without conversion
 - `--skill-dir PATH` overrides the configured GigaCode skills directory
 - `--force-skill-install` replaces an existing modified bundled skill
 - interactive `--plan` checks for `<skills-dir>/planning/SKILL.md` before

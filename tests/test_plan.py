@@ -101,6 +101,45 @@ example
         self.assertEqual(plan.tasks[0], plan.first_uncompleted_task())
         self.assertEqual([plan.tasks[0]], plan.tasks_matching(7, "Build parser"))
 
+    def test_parses_superpowers_plan_with_h2_tasks_and_step_checkboxes(self) -> None:
+        plan = parse_plan(
+            """# Demo Feature Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans.
+
+**Goal:** Add the demo feature.
+
+## Task 1: Build the feature
+
+**Files:**
+- Modify: `src/demo.py`
+- Test: `tests/test_demo.py`
+
+- [x] **Step 1: Write the failing test**
+- [ ] **Step 2: Write minimal implementation**
+
+```markdown
+## Task 99: This is example content
+- [ ] Ignore this checkbox
+```
+
+## Task 2: Verify the feature
+
+- [ ] **Step 1: Run the focused tests**
+"""
+        )
+
+        self.assertEqual("Demo Feature Implementation Plan", plan.title)
+        self.assertEqual([1, 2], [task.number for task in plan.tasks])
+        self.assertEqual(
+            ["Build the feature", "Verify the feature"],
+            [task.title for task in plan.tasks],
+        )
+        self.assertEqual(2, len(plan.tasks[0].checkboxes))
+        self.assertIn("**Files:**", plan.tasks[0].section)
+        self.assertIn("## Task 99: This is example content", plan.tasks[0].section)
+        self.assertEqual(plan.tasks[0], plan.first_uncompleted_task())
+
 
 if __name__ == "__main__":
     unittest.main()

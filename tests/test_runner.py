@@ -365,6 +365,70 @@ class RunnerTest(unittest.TestCase):
 
             self.assertEqual(2, len(prompts))
 
+    def test_runs_superpowers_h2_task_sections_in_order(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                """# Demo Feature Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans.
+
+**Goal:** Add a demo feature.
+
+## Task 1: Build the feature
+
+**Files:**
+- Modify: `src/demo.py`
+
+- [ ] **Step 1: Implement the feature**
+
+## Task 2: Verify the feature
+
+- [ ] **Step 1: Run the focused tests**
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: use superpowers plan")
+            prompts: list[str] = []
+
+            def complete_selected(prompt):
+                prompts.append(prompt)
+                content = plan.read_text(encoding="utf-8")
+                if len(prompts) == 1:
+                    self.assertIn("Selected task identity: 1: Build the feature", prompt)
+                    self.assertIn("**Files:**", prompt)
+                    self.assertNotIn("## Task 2: Verify the feature", prompt)
+                    content = content.replace(
+                        "- [ ] **Step 1: Implement the feature**",
+                        "- [x] **Step 1: Implement the feature**",
+                    )
+                else:
+                    self.assertIn("Selected task identity: 2: Verify the feature", prompt)
+                    content = content.replace(
+                        "- [ ] **Step 1: Run the focused tests**",
+                        "- [x] **Step 1: Run the focused tests**",
+                    )
+                plan.write_text(content, encoding="utf-8")
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", f"feat: complete task {len(prompts)}")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    delay_seconds=0,
+                ),
+                CallbackExecutor(complete_selected),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(2, len(prompts))
+
     def test_task_iteration_rejects_marking_later_section(self) -> None:
         with temporary_repo() as (repo, plan):
             plan.write_text(

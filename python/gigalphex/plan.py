@@ -7,7 +7,7 @@ from typing import Optional
 
 
 TASK_HEADER_RE = re.compile(
-    r"^###\s+(?:Task|Iteration|Задача|Итерация)\s+(?:№\s*)?([^:]+?):\s*(.*)$",
+    r"^#{2,3}\s+(?:Task|Iteration|Задача|Итерация)\s+(?:№\s*)?([^:]+?):\s*(.*)$",
     re.IGNORECASE,
 )
 CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]\s*(.*)$")
