@@ -89,6 +89,7 @@ class ExecResult:
 
 
 RetryGuard = Callable[[ExecResult], bool]
+EventCallback = Callable[[str, str, dict[str, object]], None]
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,7 @@ class GigaCodeExecutor:
         max_workers: int = 5,
         output: Optional[Callable[[str], None]] = None,
         diagnostic: Optional[Callable[[str], None]] = None,
+        event_callback: Optional[EventCallback] = None,
         name: str = "gigacode",
         statistics: Optional[RunStatistics] = None,
     ) -> None:
@@ -130,6 +132,7 @@ class GigaCodeExecutor:
         self.max_workers = max(1, max_workers)
         self.output = output or (lambda line: print(line, end=""))
         self.diagnostic = diagnostic or (lambda _line: None)
+        self.event_callback = event_callback
         self.name = name
         self.statistics = statistics
         self._active_lock = threading.Lock()
@@ -492,6 +495,7 @@ class GigaCodeExecutor:
                     )
                 decoder = stdout_decoder if source == "stdout" else stderr_decoder
                 chunk = raw_chunk if isinstance(raw_chunk, str) else decoder.decode(raw_chunk)
+                self._notify_event(session, "activity", {"source": source})
                 if source == "stdout" and chunk:
                     for visible in stream_decoder.feed(chunk):
                         chunks.append(visible)
@@ -702,12 +706,22 @@ class GigaCodeExecutor:
         return shlex.join(safe_args)
 
     def _event(self, session: str, event: str, **fields: object) -> None:
+        self._notify_event(session, event, fields)
         details = " ".join(
             f"{key}={_diagnostic_value(value)}"
             for key, value in fields.items()
         )
         suffix = f" {details}" if details else ""
         self.diagnostic(f"session={session} event={event}{suffix}")
+
+    def _notify_event(
+        self,
+        session: str,
+        event: str,
+        fields: dict[str, object],
+    ) -> None:
+        if self.event_callback is not None:
+            self.event_callback(session, event, fields)
 
 
 def matches_any(text: str, patterns: list[str]) -> bool:

@@ -1109,7 +1109,10 @@ print(json.dumps({
                 os.chdir(original_cwd)
 
             stats_file = (tmp_path / ".gigalphex/progress/stats-20260612-smoke.json").resolve()
+            dashboard_file = (tmp_path / ".gigalphex/progress/status-20260612-smoke.html").resolve()
+            dashboard_json = (tmp_path / ".gigalphex/progress/status-20260612-smoke.json").resolve()
             stats = json.loads(stats_file.read_text(encoding="utf-8"))
+            dashboard_state = json.loads(dashboard_json.read_text(encoding="utf-8"))
             self.assertEqual(0, code)
             self.assertEqual(1, stats["call_count"])
             self.assertEqual(105, stats["usage"]["total_tokens"])
@@ -1119,6 +1122,11 @@ print(json.dumps({
             self.assertIn("status: success", stdout.getvalue())
             self.assertIn("tokens: input=100 output=5", stdout.getvalue())
             self.assertIn(f"statistics: {stats_file}", stdout.getvalue())
+            self.assertIn(f"dashboard: {dashboard_file}", stdout.getvalue())
+            self.assertNotIn("implemented", stdout.getvalue())
+            self.assertEqual("success", dashboard_state["status"])
+            self.assertEqual(105, dashboard_state["usage"]["total_tokens"])
+            self.assertTrue(dashboard_file.is_file())
 
     def test_interrupted_run_writes_statistics_file_with_absolute_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as home_tmp:

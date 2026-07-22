@@ -116,6 +116,29 @@ class ExecutorTest(unittest.TestCase):
         self.assertNotIn(prompt, joined)
         self.assertNotIn("SECRET PROMPT", joined)
 
+    def test_structured_event_callback_receives_lifecycle_events(self) -> None:
+        events: list[tuple[str, str, dict[str, object]]] = []
+        with patch("subprocess.Popen") as popen:
+            process = popen.return_value
+            process.pid = 12345
+            process.stdout = MagicMock()
+            process.stdout.__iter__.return_value = iter(["ok\n"])
+            process.wait.return_value = 0
+            process.poll.return_value = 0
+
+            result = GigaCodeExecutor(
+                output=lambda _line: None,
+                event_callback=lambda session, event, fields: events.append(
+                    (session, event, fields)
+                ),
+                name="task",
+            ).run("prompt")
+
+        self.assertTrue(result.ok)
+        self.assertIn(("task", "started", {"pid": 12345}), events)
+        self.assertTrue(any(event == "activity" for _, event, _ in events))
+        self.assertTrue(any(event == "finished" for _, event, _ in events))
+
     def test_batch_diagnostics_identify_each_session(self) -> None:
         diagnostics: list[str] = []
         executor = GigaCodeExecutor(

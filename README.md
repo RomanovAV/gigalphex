@@ -8,7 +8,7 @@ This is a small standalone rewrite of the useful ralphex core:
   `Task N:` / `Iteration N:` / `Задача N:` / `Итерация N:` headings
 - execute Superpowers `docs/superpowers/plans/*.md` implementation plans directly
 - run one task section per agent iteration
-- stream output to terminal and progress logs
+- keep detailed agent output in progress logs and generate a live local dashboard
 - detect gigalphex completion signals
 - run review and a default finalize pass
 - run five specialist review agents in parallel, then synthesize/fix findings
@@ -32,9 +32,9 @@ GigaCode. If custom `gigacode_args` do not include `{prompt}`, GigaLphex adds
 `-p <generated prompt>` instead of sending a non-interactive prompt through
 stdin.
 For the actual subprocess invocation GigaLphex also enforces
-`--output-format stream-json`. Assistant text is decoded back into the normal
-terminal/progress stream, while final `result` events provide exact token and
-timing statistics.
+`--output-format stream-json`. Assistant text is decoded into the detailed
+progress log, while lifecycle events update a concise local dashboard and final
+`result` events provide exact token and timing statistics.
 Custom non-interactive arguments cannot disable shell execution accidentally:
 GigaLphex normalizes every plan, task, review, synthesis, and finalize invocation
 to include `--approval-mode=auto-edit` and allow `run_shell_command`.
@@ -45,8 +45,23 @@ them. The explicit `-p` form is therefore the reliable non-interactive contract
 for GigaCode 26.5.17 and is also the form recommended by its runtime approval
 error. `--approval-mode=auto-edit` allows edit/write tools, while shell commands
 such as tests and `git commit` also require
-`--allowed-tools run_shell_command`. Output is streamed from combined
-stdout/stderr back to the terminal and progress log.
+`--allowed-tools run_shell_command`. Combined stdout/stderr is streamed into
+the detailed progress log without flooding the normal terminal output.
+
+Every plan execution and review run creates two live status files next to its
+progress log:
+
+```text
+.gigalphex/progress/status-my-feature.json
+.gigalphex/progress/status-my-feature.html
+```
+
+The CLI prints the absolute dashboard path when the run starts. Open the HTML
+file in any browser; it is self-contained, needs no HTTP server, and refreshes
+while the run is active. It shows task checklist progress, the current phase,
+parallel review sessions, retries, failures, elapsed time, and known token
+usage. The JSON file exposes the same state for future integrations. The full
+agent transcript and executor diagnostics remain in `progress-my-feature.txt`.
 
 Interactive plan creation is different. When stdin and stdout are attached to
 a terminal, `--plan` launches GigaCode with
@@ -129,8 +144,9 @@ Observed GigaCode constraints:
   `--approval-mode=auto-edit` must be paired with
   `--allowed-tools run_shell_command`; `gigalphex` includes both by default and
   still detects the warning if it appears.
-- There is no `IN_PROGRESS` signal. Progress is inferred from process lifetime,
-  terminal output, and the progress log.
+- There is no `IN_PROGRESS` signal. The dashboard therefore reports factual
+  outer progress—plan checkboxes, phases, active processes, output activity,
+  and retries—instead of inventing a percentage for an active LLM session.
 - Progress logs include executor lifecycle events for every phase: sanitized
   command, prompt transport and size, process start/PID, first output, timeout
   or approval detection, exit status, token usage, and retry decisions. Prompt

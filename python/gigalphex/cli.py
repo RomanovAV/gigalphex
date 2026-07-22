@@ -14,6 +14,7 @@ from .config import (
     init_project_prompt_templates,
     load_config,
 )
+from .dashboard import ProgressDashboard, dashboard_paths
 from .executor import GigaCodeExecutor
 from .git import (
     GitError,
@@ -631,6 +632,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     progress_base = plan_source.name if plan_source else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
+    dashboard_json, dashboard_html = dashboard_paths(progress_file)
+    dashboard = ProgressDashboard(
+        dashboard_json,
+        dashboard_html,
+        name=progress_base,
+        plan_file=plan_file,
+        plan_kind=plan_source.kind if plan_source else "gigalphex",
+        progress_file=progress_file,
+        branch=git.current_branch() if not args.dry_run and git.is_repo() else "",
+        tasks_enabled=not args.review,
+        review_enabled=not args.tasks_only,
+        finalize_enabled=cfg.finalize_enabled and not args.tasks_only,
+    )
+    if not args.dry_run:
+        dashboard.start()
+        print(f"dashboard: {dashboard_html.resolve()}")
     statistics = RunStatistics()
     stats_file = statistics_path(progress_file).resolve()
     if not args.dry_run:
@@ -646,8 +663,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         rate_limit_patterns=cfg.rate_limit_patterns,
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
-        output=log.stream,
+        output=log.write,
         diagnostic=log.diagnostic,
+        event_callback=dashboard.executor_event,
         name="task",
         statistics=statistics,
     )
@@ -662,8 +680,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         rate_limit_patterns=cfg.rate_limit_patterns,
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
-        output=log.stream,
+        output=log.write,
         diagnostic=log.diagnostic,
+        event_callback=dashboard.executor_event,
         name="review-synthesis",
         statistics=statistics,
     )
@@ -678,8 +697,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         rate_limit_patterns=cfg.rate_limit_patterns,
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
-        output=log.stream,
+        output=log.write,
         diagnostic=log.diagnostic,
+        event_callback=dashboard.executor_event,
         name="review-agent",
         statistics=statistics,
     )
@@ -694,8 +714,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         rate_limit_patterns=cfg.rate_limit_patterns,
         wait_on_rate_limit=cfg.wait_on_rate_limit,
         max_workers=cfg.review_workers,
-        output=log.stream,
+        output=log.write,
         diagnostic=log.diagnostic,
+        event_callback=dashboard.executor_event,
         name="finalize",
         statistics=statistics,
     )
@@ -760,6 +781,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             synthesis_executor=synthesis_executor,
             review_agent_executor=review_agent_executor,
             finalize_executor=finalize_executor,
+            dashboard=dashboard,
         ).run()
         if (
             not args.dry_run
@@ -787,14 +809,20 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"ready to archive with: openspec archive {plan_source.name}\n")
             print(f"OpenSpec change complete: {plan_source.name}")
             print(f"ready to archive with: openspec archive {plan_source.name}")
+        if not args.dry_run:
+            dashboard.complete()
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         exit_code = 130
         run_status = "interrupted"
+        if not args.dry_run:
+            dashboard.interrupt()
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         exit_code = 1
         run_status = "failed"
+        if not args.dry_run:
+            dashboard.fail(str(exc))
     finally:
         if not args.dry_run:
             statistics.finish(run_status)

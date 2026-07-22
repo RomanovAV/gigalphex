@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from typing import Optional
 
+from .dashboard import ProgressDashboard
 from .executor import ExecResult, GigaCodeExecutor
 from .git import GitService
 from .plan import Plan, Task, file_has_uncompleted_checkbox, parse_plan, parse_plan_file
@@ -61,6 +62,7 @@ class Runner:
         synthesis_executor: Optional[GigaCodeExecutor] = None,
         review_agent_executor: Optional[GigaCodeExecutor] = None,
         finalize_executor: Optional[GigaCodeExecutor] = None,
+        dashboard: Optional[ProgressDashboard] = None,
     ) -> None:
         self.options = options
         self.executor = executor
@@ -68,6 +70,7 @@ class Runner:
         self.review_agent_executor = review_agent_executor or self.synthesis_executor
         self.finalize_executor = finalize_executor or self.synthesis_executor
         self.log = log
+        self.dashboard = dashboard
 
     def run(self) -> None:
         if self.options.dry_run:
@@ -84,6 +87,8 @@ class Runner:
             self.run_finalize()
 
     def run_tasks(self) -> None:
+        if self.dashboard is not None:
+            self.dashboard.phase_started("tasks", "Executing plan tasks")
         if self.options.plan_file is None:
             raise ValueError("plan file is required for task execution")
         self._validate_plan_has_tasks()
@@ -109,6 +114,12 @@ class Runner:
                 selected_task.section,
             )
             task_label = self._task_label(selected_task)
+            if self.dashboard is not None:
+                self.dashboard.task_started(
+                    selected_task.number,
+                    selected_task.title,
+                    iteration,
+                )
             self.log.section(f"task iteration {iteration}: {task_label}")
             result = self.executor.run(
                 prompt,
@@ -166,6 +177,8 @@ class Runner:
                 head_before,
                 dirty_before,
             )
+            if self.dashboard is not None:
+                self.dashboard.task_finished()
             if result.signal == ALL_TASKS_DONE and not self._has_uncompleted_work():
                 return
             if not self._has_uncompleted_work():
@@ -174,6 +187,8 @@ class Runner:
         raise RuntimeError(f"max task iterations reached: {self.options.max_iterations}")
 
     def run_review(self) -> None:
+        if self.dashboard is not None:
+            self.dashboard.phase_started("review", "Reviewing the completed changes")
         if self.options.parallel_review:
             self.run_parallel_review()
             return
@@ -248,6 +263,8 @@ class Runner:
         raise RuntimeError(f"max review iterations reached: {self.options.review_iterations}")
 
     def run_finalize(self) -> None:
+        if self.dashboard is not None:
+            self.dashboard.phase_started("finalize", "Running final verification")
         self.log.section("finalize")
         head_before = self._git().head_commit()
         dirty_before = self._uncommitted_paths()
