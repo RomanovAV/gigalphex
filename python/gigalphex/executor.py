@@ -151,6 +151,7 @@ class GigaCodeExecutor:
     def run_interactive(self, prompt: str) -> ExecResult:
         session = self.name
         started = time.monotonic()
+        terminal_state = _capture_terminal_state()
         argv, stdin_prompt = self._build_invocation(
             prompt,
             require_placeholder=True,
@@ -189,6 +190,8 @@ class GigaCodeExecutor:
                 timed_out=True,
             )
             return ExecResult(output="", returncode=-1, timed_out=True)
+        finally:
+            _restore_terminal_state(terminal_state)
         self._event(
             session,
             "finished",
@@ -335,7 +338,7 @@ class GigaCodeExecutor:
             self._event(session, "launching")
             proc = subprocess.Popen(
                 argv,
-                stdin=subprocess.PIPE if pipe_stdin else None,
+                stdin=subprocess.PIPE if pipe_stdin else subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 start_new_session=os.name == "posix",
@@ -917,6 +920,32 @@ def _read_output_chunks(
 
     # Test doubles and unusual stream wrappers may only support iteration.
     yield from stream
+
+
+def _capture_terminal_state() -> Optional[tuple[int, object]]:
+    if os.name != "posix":
+        return None
+    try:
+        import termios
+
+        file_descriptor = sys.stdin.fileno()
+        if not os.isatty(file_descriptor):
+            return None
+        return file_descriptor, termios.tcgetattr(file_descriptor)
+    except (AttributeError, io.UnsupportedOperation, OSError, ValueError):
+        return None
+
+
+def _restore_terminal_state(state: Optional[tuple[int, object]]) -> None:
+    if state is None or os.name != "posix":
+        return
+    file_descriptor, attributes = state
+    try:
+        import termios
+
+        termios.tcsetattr(file_descriptor, termios.TCSADRAIN, attributes)
+    except (AttributeError, OSError, ValueError):
+        pass
 
 
 def _elapsed_ms(started: float) -> int:

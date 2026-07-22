@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -50,7 +51,7 @@ class ExecutorTest(unittest.TestCase):
             ],
             popen.call_args.args[0],
         )
-        self.assertIsNone(popen.call_args.kwargs["stdin"])
+        self.assertEqual(subprocess.DEVNULL, popen.call_args.kwargs["stdin"])
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
     def test_command_line_quotes_empty_prompt_arg(self) -> None:
@@ -82,7 +83,7 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual("-p", argv[-2])
         self.assertEqual(prompt, argv[-1])
         self.assertEqual(1, argv.count(prompt))
-        self.assertIsNone(popen.call_args.kwargs["stdin"])
+        self.assertEqual(subprocess.DEVNULL, popen.call_args.kwargs["stdin"])
 
     def test_diagnostics_record_stages_without_prompt_contents(self) -> None:
         prompt = "SECRET PROMPT\nwith multiple lines"
@@ -290,6 +291,50 @@ Path({str(output_file)!r}).write_text(json.dumps({{"argv": sys.argv[1:]}}))
 
         with self.assertRaisesRegex(ValueError, "must include \\{prompt\\}"):
             executor.run_interactive("use planning skill")
+
+    def test_interactive_run_restores_terminal_state(self) -> None:
+        executor = GigaCodeExecutor(
+            command="gigacode",
+            args=["--prompt-interactive", "{prompt}"],
+        )
+        terminal_state = (42, ["original settings"])
+
+        with (
+            patch(
+                "gigalphex.executor._capture_terminal_state",
+                return_value=terminal_state,
+            ),
+            patch("gigalphex.executor._restore_terminal_state") as restore,
+            patch(
+                "subprocess.run",
+                return_value=subprocess.CompletedProcess([], returncode=0),
+            ),
+        ):
+            result = executor.run_interactive("use planning skill")
+
+        self.assertTrue(result.ok)
+        restore.assert_called_once_with(terminal_state)
+
+    def test_interactive_timeout_restores_terminal_state(self) -> None:
+        executor = GigaCodeExecutor(
+            command="gigacode",
+            args=["--prompt-interactive", "{prompt}"],
+            timeout=1,
+        )
+        terminal_state = (42, ["original settings"])
+
+        with (
+            patch(
+                "gigalphex.executor._capture_terminal_state",
+                return_value=terminal_state,
+            ),
+            patch("gigalphex.executor._restore_terminal_state") as restore,
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired([], 1)),
+        ):
+            result = executor.run_interactive("use planning skill")
+
+        self.assertTrue(result.timed_out)
+        restore.assert_called_once_with(terminal_state)
 
     def test_adds_trailing_newline_to_streamed_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
