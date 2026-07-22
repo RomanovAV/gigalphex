@@ -204,7 +204,10 @@ class CliTest(unittest.TestCase):
 
             self.assertEqual(0, code)
             self.assertIn("Selected task identity: 1: Добавить метод", stdout.getvalue())
-            self.assertIn("`- [x] 1. Добавить метод`", stdout.getvalue())
+            self.assertIn(
+                "<COMPLETION_MARKER>\n- [x] 1. Добавить метод\n</COMPLETION_MARKER>",
+                stdout.getvalue(),
+            )
 
     def test_completed_openspec_change_is_not_moved_and_prints_archive_hint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

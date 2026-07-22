@@ -15,6 +15,7 @@ from gigalphex.prompts import (
     render_review_format_retry_prompt,
     render_review_prompt,
     render_review_synthesis_prompt,
+    render_task_completion_retry_prompt,
     render_task_prompt,
 )
 from gigalphex.review import ReviewOutputError
@@ -141,14 +142,40 @@ class PromptTemplatesTest(unittest.TestCase):
                 plan_source=Path("openspec/changes/add-search"),
             ),
             3,
-            "Изменить логику",
-            "## Задача 3: Изменить логику\nОписание реализации.",
+            "Добавить `getActiveContractCutoffDate()`",
+            "## Задача 3: Добавить `getActiveContractCutoffDate()`\nОписание реализации.",
             True,
         )
 
         self.assertIn("generated without a checkbox", prompt)
-        self.assertIn("`- [x] 3. Изменить логику`", prompt)
+        self.assertIn(
+            "<COMPLETION_MARKER>\n"
+            "- [x] 3. Добавить `getActiveContractCutoffDate()`\n"
+            "</COMPLETION_MARKER>",
+            prompt,
+        )
         self.assertIn("immediately below its heading", prompt)
+
+    def test_task_completion_retry_prompt_names_exact_missing_prose_marker(self) -> None:
+        prompt = render_task_completion_retry_prompt(
+            "original task prompt",
+            Path("openspec/changes/add-search/tasks.md"),
+            3,
+            "Изменить `getActiveContractCutoffDate()`",
+            "## Задача 3: Изменить `getActiveContractCutoffDate()`\nОписание реализации.",
+            True,
+        )
+
+        self.assertIn("previous task agent process exited successfully", prompt)
+        self.assertIn("corrective retry for the same selected task", prompt)
+        self.assertIn(
+            "<COMPLETION_MARKER>\n"
+            "- [x] 3. Изменить `getActiveContractCutoffDate()`\n"
+            "</COMPLETION_MARKER>",
+            prompt,
+        )
+        self.assertIn("do not mark the task complete merely to satisfy the runner", prompt)
+        self.assertIn("<CURRENT_SELECTED_PLAN_SECTION>", prompt)
 
     def test_custom_task_prompt_also_gets_mandatory_task_binding(self) -> None:
         prompt = render_task_prompt(

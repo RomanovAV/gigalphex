@@ -20,6 +20,7 @@ from .prompts import (
     render_review_format_retry_prompt,
     render_review_prompt,
     render_review_synthesis_prompt,
+    render_task_completion_retry_prompt,
     render_task_prompt,
 )
 from .review import ReviewOutputError, normalize_review_output
@@ -51,6 +52,7 @@ class RunOptions:
     plan_kind: str = "gigalphex"
     plan_source: Optional[Path] = None
     plan_context_files: tuple[Path, ...] = ()
+    task_completion_retries: int = 1
 
 
 class Runner:
@@ -134,49 +136,73 @@ class Runner:
                     )
                 ),
             )
-            if not result.ok:
-                if not self._task_iteration_completed_cleanly(
+            self._accept_task_result_or_raise(
+                result,
+                selected_task,
+                plan_before,
+                context_before,
+                head_before,
+                dirty_before,
+            )
+            completion_retries = 0
+            while (
+                completion_retries < max(0, self.options.task_completion_retries)
+                and self._can_retry_incomplete_task(
+                    selected_task,
+                    plan_before,
+                    context_before,
+                )
+            ):
+                completion_retries += 1
+                current_task = self._matching_task(self._parse_plan_file(), selected_task)
+                assert current_task is not None
+                self.log.section(
+                    f"task completion retry {completion_retries}: {task_label}"
+                )
+                self.log.diagnostic(
+                    "session=task event=completion_retry_scheduled "
+                    f"task={task_label!r} attempt={completion_retries} "
+                    f"attempts={max(0, self.options.task_completion_retries)}"
+                )
+                retry_plan_before = self.options.plan_file.read_text(encoding="utf-8")
+                retry_context_before = self._plan_context_snapshot()
+                retry_head_before = self._git().head_commit()
+                retry_dirty_before = self._uncommitted_paths()
+                retry_prompt = render_task_completion_retry_prompt(
+                    prompt,
+                    self.options.plan_file,
+                    selected_task.number,
+                    selected_task.title,
+                    current_task.section,
+                    selected_task.has_implicit_tracking,
+                )
+                result = self.executor.run(
+                    retry_prompt,
+                    retry_guard=(
+                        lambda _result: self._prepare_task_retry(
+                            selected_task,
+                            retry_plan_before,
+                            retry_context_before,
+                            retry_head_before,
+                            retry_dirty_before,
+                        )
+                    ),
+                )
+                self._accept_task_result_or_raise(
+                    result,
                     selected_task,
                     plan_before,
                     context_before,
                     head_before,
                     dirty_before,
-                ):
-                    self._restore_plan_snapshot(
-                        plan_before,
-                        selected_task,
-                        reason="attempts_exhausted",
-                    )
-                    if (
-                        self._git().head_commit() != head_before
-                        or self._uncommitted_paths() - dirty_before
-                    ):
-                        raise RuntimeError(
-                            self._describe_task_failure_with_repository_changes(
-                                result,
-                                selected_task,
-                                head_before,
-                                dirty_before,
-                            )
-                        )
-                    raise RuntimeError(describe_failure("gigacode task session", result))
-                self.log.diagnostic(
-                    "session=task event=failure_recovered "
-                    f"task={task_label!r} reason=committed_task_completion"
                 )
-            if result.signal == TASK_FAILED:
-                self._restore_plan_snapshot(
-                    plan_before,
-                    selected_task,
-                    reason="task_failed",
-                )
-                raise RuntimeError("task failed")
             self._validate_completed_task_iteration(
                 selected_task,
                 plan_before,
                 context_before,
                 head_before,
                 dirty_before,
+                completion_retries,
             )
             if self.dashboard is not None:
                 self.dashboard.task_finished()
@@ -358,20 +384,28 @@ class Runner:
         context_before: dict[Path, bytes],
         head_before: str,
         dirty_before: set[Path],
+        completion_retries: int = 0,
     ) -> None:
         assert self.options.plan_file is not None
         plan = self._parse_plan_file()
         completed_task = self._matching_task(plan, selected_task)
-        if completed_task is None or not completed_task.complete:
-            raise RuntimeError(
-                f"task {self._task_label(selected_task)} did not complete its selected plan section"
-            )
         self._validate_later_tasks_unchanged(selected_task, plan_before, plan)
         changed_context = self._changed_plan_context(context_before)
         if changed_context:
             paths = ", ".join(self._display_path(path) for path in changed_context)
             raise RuntimeError(
                 f"task {self._task_label(selected_task)} modified read-only plan context: {paths}"
+            )
+        if completed_task is None or not completed_task.complete:
+            retry_suffix = (
+                f" after {completion_retries} automatic completion "
+                f"{'retry' if completion_retries == 1 else 'retries'}"
+                if completion_retries
+                else ""
+            )
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} did not complete its selected plan section"
+                f"{retry_suffix}"
             )
 
         git = self._git()
@@ -390,6 +424,78 @@ class Runner:
             head_before,
             f"task {self._task_label(selected_task)}",
         )
+
+    def _accept_task_result_or_raise(
+        self,
+        result: ExecResult,
+        selected_task: Task,
+        plan_before: str,
+        context_before: dict[Path, bytes],
+        head_before: str,
+        dirty_before: set[Path],
+    ) -> None:
+        task_label = self._task_label(selected_task)
+        if not result.ok:
+            if not self._task_iteration_completed_cleanly(
+                selected_task,
+                plan_before,
+                context_before,
+                head_before,
+                dirty_before,
+            ):
+                self._restore_plan_snapshot(
+                    plan_before,
+                    selected_task,
+                    reason="attempts_exhausted",
+                )
+                if (
+                    self._git().head_commit() != head_before
+                    or self._uncommitted_paths() - dirty_before
+                ):
+                    raise RuntimeError(
+                        self._describe_task_failure_with_repository_changes(
+                            result,
+                            selected_task,
+                            head_before,
+                            dirty_before,
+                        )
+                    )
+                raise RuntimeError(describe_failure("gigacode task session", result))
+            self.log.diagnostic(
+                "session=task event=failure_recovered "
+                f"task={task_label!r} reason=committed_task_completion"
+            )
+        if result.signal == TASK_FAILED:
+            self._restore_plan_snapshot(
+                plan_before,
+                selected_task,
+                reason="task_failed",
+            )
+            raise RuntimeError("task failed")
+
+    def _can_retry_incomplete_task(
+        self,
+        selected_task: Task,
+        plan_before: str,
+        context_before: dict[Path, bytes],
+    ) -> bool:
+        plan = self._parse_plan_file()
+        current_task = self._matching_task(plan, selected_task)
+        if current_task is None or current_task.complete:
+            return False
+        if not self._later_tasks_unchanged(selected_task, plan_before, plan):
+            self.log.diagnostic(
+                "session=task event=completion_retry_rejected "
+                f"task={self._task_label(selected_task)!r} reason=later_tasks_modified"
+            )
+            return False
+        if self._changed_plan_context(context_before):
+            self.log.diagnostic(
+                "session=task event=completion_retry_rejected "
+                f"task={self._task_label(selected_task)!r} reason=read_only_context_modified"
+            )
+            return False
+        return True
 
     def _prepare_task_retry(
         self,

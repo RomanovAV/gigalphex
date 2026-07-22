@@ -314,9 +314,13 @@ Review behavior:
 - kill silent sessions with `--idle-timeout SECONDS`; any stdout bytes reset
   the timer even when the process has not emitted a complete line
 - retry failed sessions with `--retry-count N --retry-delay SECONDS`
-- before retrying an incomplete task, GigaLphex restores the plan snapshot from
-  the start of that iteration so the retry selects the same task; partial code
-  changes remain available for the next attempt
+- when a successful task session leaves its selected checkbox or prose-task
+  marker pending, automatically recheck the unchanged task boundary and retry
+  it up to `retry_count` times with an explicit corrective prompt; unsafe
+  changes to later tasks or read-only OpenSpec context are never retried
+- before retrying a failed task process, GigaLphex restores the plan snapshot
+  from the start of that iteration so the retry selects the same task; partial
+  code changes remain available for the next attempt
 - if a task session times out after a clean task commit, the completed
   iteration is accepted without rerunning the task agent
 - only exhausted task retries stop for operator inspection; the plan is restored

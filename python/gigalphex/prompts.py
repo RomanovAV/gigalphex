@@ -123,8 +123,29 @@ OPENSPEC_CONTEXT_GUIDANCE = """OpenSpec change context:
 
 OPENSPEC_IMPLICIT_TRACKING_GUIDANCE = """OpenSpec prose-task tracking:
 - the selected section was generated without a checkbox and is treated as pending work
-- after completing and validating the whole selected section, add exactly this line immediately below its heading: `- [x] {task_number}. {task_title}`
+- after completing and validating the whole selected section, add exactly the line between the markers immediately below its heading:
+<COMPLETION_MARKER>
+- [x] {task_number}. {task_title}
+</COMPLETION_MARKER>
 - this new checked line is the completion marker for this section; do not add markers to later sections
+"""
+
+TASK_COMPLETION_RETRY_GUIDANCE = """Automatic task-completion retry:
+- the previous task agent process exited successfully, but runner validation found that the selected section is still pending
+- this is a corrective retry for the same selected task, not permission to start another task
+- inspect the current implementation, tests, git status, and commits left by the previous attempt; preserve valid completed work and finish only what is still missing
+- do not mark the task complete merely to satisfy the runner: first verify that the selected task is implemented and its relevant validation passes
+
+Current selected section after the previous attempt:
+<CURRENT_SELECTED_PLAN_SECTION>
+{current_task_section}
+</CURRENT_SELECTED_PLAN_SECTION>
+
+Required checklist correction:
+{completion_requirement}
+
+- commit any remaining implementation and checklist updates, including a checklist-only bookkeeping commit when the implementation is already committed
+- leave no new uncommitted changes and do not modify or mark any later task section
 """
 
 JIRA_COMMIT_GUIDANCE = """Jira commit policy:
@@ -531,6 +552,36 @@ def render_task_prompt(
             JIRA_COMMIT_GUIDANCE.format(jira_task=context.jira_task),
         )
     return _with_guidance(rendered, TASK_FORMAT_GUIDANCE)
+
+
+def render_task_completion_retry_prompt(
+    task_prompt: str,
+    plan_file: Path,
+    task_number: object,
+    task_title: str,
+    current_task_section: str,
+    task_implicit_tracking: bool,
+) -> str:
+    if task_implicit_tracking:
+        completion_requirement = (
+            f"- after successful verification, add exactly the line between these markers "
+            f"immediately below the selected task heading in `{plan_file}`:\n"
+            f"<COMPLETION_MARKER>\n"
+            f"- [x] {task_number}. {task_title}\n"
+            f"</COMPLETION_MARKER>"
+        )
+    else:
+        completion_requirement = (
+            f"- after successful verification, change every remaining actionable `[ ]` item "
+            f"in this selected section of `{plan_file}` to `[x]`"
+        )
+    return _with_guidance(
+        task_prompt,
+        TASK_COMPLETION_RETRY_GUIDANCE.format(
+            current_task_section=current_task_section,
+            completion_requirement=completion_requirement,
+        ),
+    )
 
 
 def _context_values(context: PromptContext) -> dict[str, object]:

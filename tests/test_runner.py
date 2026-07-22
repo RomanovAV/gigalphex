@@ -524,7 +524,10 @@ class RunnerTest(unittest.TestCase):
                         "## Задача 1: Реализовать поиск\n",
                         f"## Задача 1: Реализовать поиск\n{marker}",
                     )
-                    self.assertIn(f"`{marker.strip()}`", prompt)
+                    self.assertIn(
+                        f"<COMPLETION_MARKER>\n{marker.strip()}\n</COMPLETION_MARKER>",
+                        prompt,
+                    )
                     self.assertNotIn("- [x] 2. Написать тесты", content)
                 else:
                     marker = "- [x] 2. Написать тесты\n"
@@ -532,7 +535,10 @@ class RunnerTest(unittest.TestCase):
                         "## Задача 2: Написать тесты\n",
                         f"## Задача 2: Написать тесты\n{marker}",
                     )
-                    self.assertIn(f"`{marker.strip()}`", prompt)
+                    self.assertIn(
+                        f"<COMPLETION_MARKER>\n{marker.strip()}\n</COMPLETION_MARKER>",
+                        prompt,
+                    )
                 tasks.write_text(content, encoding="utf-8")
                 git(repo, "add", str(tasks))
                 git(repo, "commit", "-m", f"feat: complete prose task {len(prompts)}")
@@ -557,6 +563,174 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(2, len(prompts))
             self.assertIn("- [x] 1. Реализовать поиск", tasks.read_text(encoding="utf-8"))
             self.assertIn("- [x] 2. Написать тесты", tasks.read_text(encoding="utf-8"))
+
+    def test_retries_successful_openspec_prose_task_when_marker_is_missing(self) -> None:
+        with temporary_repo() as (repo, _legacy_plan):
+            change = repo / "openspec/changes/add-search"
+            change.mkdir(parents=True)
+            tasks = change / "tasks.md"
+            tasks.write_text(
+                "## Задача 1: Реализовать поиск\n\nИзменить сервис поиска.\n",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(change))
+            git(repo, "commit", "-m", "docs: add prose OpenSpec task")
+            prompts: list[str] = []
+
+            def omit_then_add_marker(prompt):
+                prompts.append(prompt)
+                if len(prompts) == 1:
+                    (repo / "search.txt").write_text("implemented\n", encoding="utf-8")
+                    git(repo, "add", "search.txt")
+                    git(repo, "commit", "-m", "feat: implement search")
+                    return ExecResult(output="implemented\n", returncode=0)
+
+                self.assertIn("Automatic task-completion retry", prompt)
+                self.assertIn(
+                    "<COMPLETION_MARKER>\n- [x] 1. Реализовать поиск\n</COMPLETION_MARKER>",
+                    prompt,
+                )
+                tasks.write_text(
+                    tasks.read_text(encoding="utf-8").replace(
+                        "## Задача 1: Реализовать поиск\n",
+                        "## Задача 1: Реализовать поиск\n- [x] 1. Реализовать поиск\n",
+                    ),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(tasks))
+                git(repo, "commit", "-m", "docs: mark search task complete")
+                return ExecResult(output="bookkeeping complete\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=tasks,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    delay_seconds=0,
+                    plan_kind="openspec",
+                    plan_source=change,
+                ),
+                CallbackExecutor(omit_then_add_marker),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(2, len(prompts))
+            self.assertIn("- [x] 1. Реализовать поиск", tasks.read_text(encoding="utf-8"))
+            self.assertIn(
+                "event=completion_retry_scheduled",
+                (repo / "progress.txt").read_text(encoding="utf-8"),
+            )
+
+    def test_retries_successful_checkbox_task_when_checkbox_is_still_pending(self) -> None:
+        with temporary_repo() as (repo, plan):
+            prompts: list[str] = []
+
+            def omit_then_check(prompt):
+                prompts.append(prompt)
+                if len(prompts) == 1:
+                    return ExecResult(output="done\n", returncode=0)
+                self.assertIn("every remaining actionable `[ ]` item", prompt)
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "feat: complete task")
+                return ExecResult(output="completed\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                CallbackExecutor(omit_then_check),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(2, len(prompts))
+
+    def test_stops_after_configured_task_completion_retries(self) -> None:
+        with temporary_repo() as (repo, plan):
+            prompts: list[str] = []
+
+            def keep_omitting_marker(prompt):
+                prompts.append(prompt)
+                return ExecResult(output="done\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    task_completion_retries=2,
+                ),
+                CallbackExecutor(keep_omitting_marker),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "did not complete its selected plan section after 2 automatic completion retries",
+            ):
+                runner.run_tasks()
+
+            self.assertEqual(3, len(prompts))
+
+    def test_does_not_retry_incomplete_task_after_later_section_is_modified(self) -> None:
+        with temporary_repo() as (repo, plan):
+            plan.write_text(
+                plan.read_text(encoding="utf-8")
+                + """
+
+### Task 2: Follow-up
+- [ ] Complete the follow-up
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(plan))
+            git(repo, "commit", "-m", "docs: add follow-up")
+            prompts: list[str] = []
+
+            def modify_later_task(prompt):
+                prompts.append(prompt)
+                plan.write_text(
+                    plan.read_text(encoding="utf-8").replace(
+                        "- [ ] Complete the follow-up",
+                        "- [x] Complete the follow-up",
+                    ),
+                    encoding="utf-8",
+                )
+                git(repo, "add", str(plan))
+                git(repo, "commit", "-m", "docs: modify later task")
+                return ExecResult(output="done\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=plan,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                ),
+                CallbackExecutor(modify_later_task),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "marked a later plan section"):
+                runner.run_tasks()
+
+            self.assertEqual(1, len(prompts))
+            self.assertIn(
+                "event=completion_retry_rejected",
+                (repo / "progress.txt").read_text(encoding="utf-8"),
+            )
 
     def test_openspec_task_rejects_changes_to_read_only_artifacts(self) -> None:
         with temporary_repo() as (repo, _legacy_plan):

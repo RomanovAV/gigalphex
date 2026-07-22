@@ -106,7 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--review-iterations", type=int, help="maximum review iterations")
     parser.add_argument("--session-timeout", type=int, help="seconds before killing one gigacode session")
     parser.add_argument("--idle-timeout", type=int, help="seconds of no output before killing one gigacode session")
-    parser.add_argument("--retry-count", type=int, help="retry failed gigacode sessions N times")
+    parser.add_argument(
+        "--retry-count",
+        type=int,
+        help="retry failed gigacode sessions and incomplete task completions N times",
+    )
     parser.add_argument("--retry-delay", type=float, help="seconds between gigacode retries")
     parser.add_argument("--retry-pattern", action="append", default=[], help="transient error text to treat as retryable")
     parser.add_argument("--rate-limit-pattern", action="append", default=[], help="rate-limit text to detect in failed sessions")
@@ -769,6 +773,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         plan_kind=plan_source.kind if plan_source else "gigalphex",
         plan_source=plan_source.source_path if plan_source else None,
         plan_context_files=plan_source.context_paths if plan_source else (),
+        task_completion_retries=cfg.retry_count,
     )
 
     exit_code = 0
