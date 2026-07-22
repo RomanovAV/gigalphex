@@ -10,6 +10,7 @@ TASK_HEADER_RE = re.compile(
     r"^#{2,3}\s+(?:Task|Iteration|Задача|Итерация)\s+(?:№\s*)?([^:]+?):\s*(.*)$",
     re.IGNORECASE,
 )
+OPENSPEC_TASK_HEADER_RE = re.compile(r"^##\s+(\d+)\.\s+(.+?)\s*$")
 CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]\s*(.*)$")
 TITLE_RE = re.compile(r"^#\s+(.*)$")
 FORMAT_IN_TEXT_RE = re.compile(r"\[\s*[ xX]?\s*\]")
@@ -68,6 +69,22 @@ class Plan:
         return self.first_uncompleted_task_index() is not None
 
 
+@dataclass(frozen=True)
+class PlanSource:
+    kind: str
+    source_path: Path
+    checklist_path: Path
+    context_paths: tuple[Path, ...] = ()
+
+    @property
+    def name(self) -> str:
+        return self.source_path.name if self.source_path.is_dir() else self.source_path.stem
+
+    @property
+    def is_openspec(self) -> bool:
+        return self.kind == "openspec"
+
+
 class FenceTracker:
     def __init__(self) -> None:
         self.open_marker = ""
@@ -93,7 +110,9 @@ def parse_task_number(value: str) -> int:
         return 0
 
 
-def parse_plan(content: str) -> Plan:
+def parse_plan(content: str, *, plan_format: str = "gigalphex") -> Plan:
+    if plan_format not in {"gigalphex", "openspec"}:
+        raise ValueError(f"unsupported plan format: {plan_format}")
     plan = Plan()
     current: Optional[Task] = None
     current_lines: list[str] = []
@@ -111,7 +130,11 @@ def parse_plan(content: str) -> Plan:
                 plan.title = title_match.group(1).strip()
                 continue
 
-        task_match = TASK_HEADER_RE.match(line)
+        task_match = (
+            OPENSPEC_TASK_HEADER_RE.match(line)
+            if plan_format == "openspec"
+            else TASK_HEADER_RE.match(line)
+        )
         if task_match:
             if current is not None:
                 current.section = "\n".join(current_lines).rstrip()
@@ -146,8 +169,46 @@ def parse_plan(content: str) -> Plan:
     return plan
 
 
-def parse_plan_file(path: Path) -> Plan:
-    return parse_plan(path.read_text(encoding="utf-8"))
+def parse_plan_file(path: Path, *, plan_format: str = "gigalphex") -> Plan:
+    return parse_plan(path.read_text(encoding="utf-8"), plan_format=plan_format)
+
+
+def resolve_markdown_plan(path: Path) -> PlanSource:
+    resolved = path.resolve()
+    if not resolved.is_file():
+        raise ValueError(f"plan file not found: {resolved}")
+    return PlanSource(
+        kind="gigalphex",
+        source_path=resolved,
+        checklist_path=resolved,
+    )
+
+
+def resolve_openspec_change(path: Path) -> PlanSource:
+    resolved = path.resolve()
+    if not resolved.is_dir():
+        raise ValueError(f"OpenSpec change directory not found: {resolved}")
+    if resolved.parent.name == "archive":
+        raise ValueError(f"OpenSpec change is archived and cannot be executed: {resolved}")
+
+    checklist = resolved / "tasks.md"
+    if not checklist.is_file():
+        raise ValueError(f"OpenSpec change has no tasks.md: {resolved}")
+
+    context_paths: list[Path] = []
+    for artifact in (resolved / "proposal.md", resolved / "design.md"):
+        if artifact.is_file():
+            context_paths.append(artifact)
+    specs_dir = resolved / "specs"
+    if specs_dir.is_dir():
+        context_paths.extend(sorted(path for path in specs_dir.rglob("*.md") if path.is_file()))
+
+    return PlanSource(
+        kind="openspec",
+        source_path=resolved,
+        checklist_path=checklist,
+        context_paths=tuple(context_paths),
+    )
 
 
 def file_has_uncompleted_checkbox(path: Path) -> bool:

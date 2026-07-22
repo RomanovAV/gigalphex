@@ -151,6 +151,75 @@ class CliTest(unittest.TestCase):
             finally:
                 os.chdir(original_cwd)
 
+    def test_openspec_flag_is_distinct_from_plan_creation_and_plan_file(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            code = main(["plan.md", "--openspec", "openspec/changes/demo"])
+
+        self.assertEqual(2, code)
+        self.assertIn("cannot be combined with a markdown plan file", stderr.getvalue())
+
+    def test_openspec_dry_run_uses_tasks_and_lists_change_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            change = tmp_path / "openspec/changes/add-search"
+            spec = change / "specs/search/spec.md"
+            spec.parent.mkdir(parents=True)
+            (change / "tasks.md").write_text(
+                "## 1. Build search\n- [ ] 1.1 Implement search\n",
+                encoding="utf-8",
+            )
+            (change / "proposal.md").write_text("# Proposal\n", encoding="utf-8")
+            spec.write_text("## ADDED Requirements\n", encoding="utf-8")
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                code = main(["--openspec", str(change), "--dry-run"])
+
+            output = stdout.getvalue()
+            self.assertEqual(0, code)
+            self.assertIn("Selected task identity: 1: Build search", output)
+            self.assertIn(str(change / "proposal.md"), output)
+            self.assertIn(str(spec), output)
+            self.assertIn("progress-add-search.txt", output)
+
+    def test_completed_openspec_change_is_not_moved_and_prints_archive_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            home = tmp_path / "home"
+            change = repo / "openspec/changes/add-search"
+            change.mkdir(parents=True)
+            tasks = change / "tasks.md"
+            tasks.write_text(
+                "## 1. Build search\n- [x] 1.1 Implement search\n",
+                encoding="utf-8",
+            )
+            original_cwd = Path.cwd()
+            stdout = io.StringIO()
+            try:
+                os.chdir(repo)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                with patch.dict(os.environ, {"HOME": str(home)}), patch(
+                    "gigalphex.cli.Runner.run"
+                ), contextlib.redirect_stdout(stdout):
+                    code = main(["--openspec", str(change), "--no-branch"])
+            finally:
+                os.chdir(original_cwd)
+
+            self.assertEqual(0, code)
+            self.assertTrue(tasks.is_file())
+            self.assertFalse((change / "completed/tasks.md").exists())
+            self.assertIn("OpenSpec change complete: add-search", stdout.getvalue())
+            self.assertIn("openspec archive add-search", stdout.getvalue())
+
     def test_finalize_cli_defaults_to_config_and_can_be_disabled(self) -> None:
         parser = build_parser()
 
@@ -1155,6 +1224,65 @@ print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
             self.assertNotEqual("smoke", main_branch)
             self.assertTrue((worktree / "docs/plans/20260612-smoke.md").exists())
             self.assertIn("progress log:", stdout.getvalue())
+
+    def test_openspec_run_remaps_change_context_into_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            original_cwd = Path.cwd()
+            fake_gigacode = write_script(
+                tmp_path / "fake_gigacode.py",
+                """#!/usr/bin/env python3
+print("<<<GIGALPHEX:ALL_TASKS_DONE>>>")
+""",
+            )
+
+            try:
+                os.chdir(tmp_path)
+                subprocess.run(["git", "init"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], check=True)
+                subprocess.run(["git", "config", "user.name", "GigaLphex Test"], check=True)
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, main(["--init"]))
+
+                change = tmp_path / "openspec/changes/add-search"
+                change.mkdir(parents=True)
+                (change / "tasks.md").write_text(
+                    "## 1. Build search\n- [x] 1.1 Implement search\n",
+                    encoding="utf-8",
+                )
+                (change / "proposal.md").write_text("# Proposal\n", encoding="utf-8")
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", "initial"], check=True, stdout=subprocess.PIPE)
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    code = main(
+                        [
+                            "--openspec",
+                            str(change),
+                            "--worktree",
+                            "--gigacode-command",
+                            str(fake_gigacode),
+                            "--tasks-only",
+                        ]
+                    )
+            finally:
+                os.chdir(original_cwd)
+
+            worktree = tmp_path / ".gigalphex/worktrees/add-search"
+            branch = subprocess.run(
+                ["git", "-C", str(worktree), "branch", "--show-current"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+
+            self.assertEqual(0, code)
+            self.assertEqual("add-search", branch)
+            self.assertTrue((worktree / "openspec/changes/add-search/tasks.md").is_file())
+            self.assertTrue((worktree / "openspec/changes/add-search/proposal.md").is_file())
+            self.assertIn("OpenSpec change complete: add-search", stdout.getvalue())
 
 
 if __name__ == "__main__":

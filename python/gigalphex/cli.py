@@ -23,6 +23,12 @@ from .git import (
     move_plan_to_completed,
 )
 from .planner import clean_plan_output, next_plan_path
+from .plan import (
+    PlanSource,
+    parse_plan_file,
+    resolve_markdown_plan,
+    resolve_openspec_change,
+)
 from .progress import ProgressLog
 from .prompts import load_prompt_templates, render_make_plan, render_plan_skill
 from .runner import RunOptions, Runner
@@ -42,6 +48,12 @@ BRANCH_DESCRIPTION_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gigalphex")
     parser.add_argument("plan_file", nargs="?", help="path to markdown plan file")
+    parser.add_argument(
+        "--openspec",
+        type=Path,
+        metavar="CHANGE_DIR",
+        help="execute a local OpenSpec change directory using its tasks.md",
+    )
     parser.add_argument("--config", type=Path, help="config file path")
     parser.add_argument("--init", action="store_true", help="create local .gigalphex config")
     parser.add_argument(
@@ -142,6 +154,8 @@ def should_auto_init(args: argparse.Namespace) -> bool:
         return False
     if args.plan:
         return True
+    if args.openspec:
+        return args.openspec.exists()
     return bool(args.plan_file and Path(args.plan_file).exists())
 
 
@@ -270,6 +284,15 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 2
     else:
         args.jira_task = ""
+    if args.openspec and args.plan_file:
+        print("error: --openspec cannot be combined with a markdown plan file", file=sys.stderr)
+        return 2
+    if args.openspec and args.plan:
+        print("error: --openspec cannot be combined with --plan", file=sys.stderr)
+        return 2
+    if args.openspec and args.review:
+        print("error: --openspec cannot be combined with --review", file=sys.stderr)
+        return 2
     install_skill_requested = (
         args.install_planning_skill or args.install_superpowers_converter_skill
     )
@@ -288,13 +311,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.base_ref and args.default_branch:
         print("error: --base-ref and --default-branch cannot be used together", file=sys.stderr)
         return 2
-    if args.jira_task and not (args.plan or args.plan_file or args.review):
-        print("error: --jira-task requires a plan file, --plan, or --review", file=sys.stderr)
+    if args.jira_task and not (args.plan or args.plan_file or args.openspec or args.review):
+        print("error: --jira-task requires a plan file, --openspec, --plan, or --review", file=sys.stderr)
         return 2
     if args.jira_task and args.no_branch and not args.review:
         print("error: --jira-task requires branch creation; remove --no-branch", file=sys.stderr)
         return 2
-    if args.jira_task and args.branch and (args.plan or args.plan_file):
+    if args.jira_task and args.branch and (args.plan or args.plan_file or args.openspec):
         try:
             validate_jira_branch_name(args.branch, args.jira_task)
         except ValueError as exc:
@@ -354,6 +377,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         args.init_git
         and not args.plan
         and not args.plan_file
+        and not args.openspec
         and not args.review
         and not args.install_planning_skill
         and not args.install_superpowers_converter_skill
@@ -533,13 +557,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"progress log: {progress_file}")
         return 0
 
-    plan_file = Path(args.plan_file).resolve() if args.plan_file else None
-    if plan_file is not None and not plan_file.exists():
-        print(f"error: plan file not found: {plan_file}", file=sys.stderr)
+    plan_source: Optional[PlanSource] = None
+    try:
+        if args.openspec:
+            plan_source = resolve_openspec_change(args.openspec)
+        elif args.plan_file:
+            plan_source = resolve_markdown_plan(Path(args.plan_file))
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
-    if plan_file is None and not args.review:
-        print("error: plan file is required unless --review is used", file=sys.stderr)
+    if plan_source is None and not args.review:
+        print("error: a plan file or --openspec is required unless --review is used", file=sys.stderr)
         return 2
+
+    plan_file = plan_source.checklist_path if plan_source else None
+    plan_identity_path = plan_source.source_path if plan_source else None
 
     git = GitService(Path("."))
     worktree_path: Optional[Path] = None
@@ -560,28 +592,43 @@ def main(argv: Optional[list[str]] = None) -> int:
                         ) from exc
             ignored_dirty_paths = auto_init_written if auto_init_started_clean else []
             git.ensure_clean(cfg.allow_dirty, ignored_dirty_paths)
-            if cfg.worktree and plan_file is not None and not args.review:
-                branch = branch_for_plan(plan_file, args.branch, args.jira_task)
+            if cfg.worktree and plan_source is not None and not args.review:
+                assert plan_identity_path is not None
+                branch = branch_for_plan(plan_identity_path, args.branch, args.jira_task)
                 repo_root = git.repo_root()
                 try:
-                    plan_relative = plan_file.relative_to(repo_root)
+                    source_relative = plan_identity_path.relative_to(repo_root)
                 except ValueError as exc:
-                    raise GitError(f"plan file must be inside the git repository for --worktree: {plan_file}") from exc
+                    raise GitError(
+                        f"plan source must be inside the git repository for --worktree: {plan_identity_path}"
+                    ) from exc
                 worktree_path = git.ensure_worktree(branch)
-                plan_file = worktree_path / plan_relative
-                if not plan_file.exists():
-                    raise GitError(f"plan file is not available in worktree; commit it first: {plan_relative}")
+                worktree_source = worktree_path / source_relative
+                if not worktree_source.exists():
+                    raise GitError(
+                        f"plan source is not available in worktree; commit it first: {source_relative}"
+                    )
+                try:
+                    plan_source = (
+                        resolve_openspec_change(worktree_source)
+                        if plan_source.is_openspec
+                        else resolve_markdown_plan(worktree_source)
+                    )
+                except ValueError as exc:
+                    raise GitError(str(exc)) from exc
+                plan_file = plan_source.checklist_path
+                plan_identity_path = plan_source.source_path
                 os.chdir(worktree_path)
                 git = GitService(Path("."))
-            elif cfg.create_branch and plan_file is not None and not args.review:
-                branch = branch_for_plan(plan_file, args.branch, args.jira_task)
+            elif cfg.create_branch and plan_identity_path is not None and not args.review:
+                branch = branch_for_plan(plan_identity_path, args.branch, args.jira_task)
                 git.switch_or_create_branch(branch)
         except GitError as exc:
             hint = "; pass --init-git to initialize this directory first" if str(exc) == "not inside a git repository" else ""
             print(f"error: {exc}{hint}", file=sys.stderr)
             return 1
 
-    progress_base = plan_file.stem if plan_file else "review"
+    progress_base = plan_source.name if plan_source else "review"
     progress_file = cfg.progress_dir / f"progress-{progress_base}.txt"
     log = ProgressLog(progress_file)
     statistics = RunStatistics()
@@ -678,9 +725,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.write(f"jira task: {args.jira_task}\n")
         if worktree_path is not None:
             log.write(f"worktree: {worktree_path}\n")
-            log.write(f"branch: {branch_for_plan(plan_file, args.branch, args.jira_task)}\n")
-        elif cfg.create_branch and plan_file is not None and not args.review:
-            log.write(f"branch: {branch_for_plan(plan_file, args.branch, args.jira_task)}\n")
+            assert plan_identity_path is not None
+            log.write(f"branch: {branch_for_plan(plan_identity_path, args.branch, args.jira_task)}\n")
+        elif cfg.create_branch and plan_identity_path is not None and not args.review:
+            log.write(f"branch: {branch_for_plan(plan_identity_path, args.branch, args.jira_task)}\n")
+        if plan_source and plan_source.is_openspec:
+            log.write(f"OpenSpec change: {plan_source.source_path}\n")
+            log.write(f"OpenSpec checklist: {plan_source.checklist_path}\n")
     options = RunOptions(
         plan_file=plan_file,
         progress_file=progress_file,
@@ -694,6 +745,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         parallel_review=not args.no_parallel_review,
         prompts=prompts,
         jira_task=args.jira_task,
+        plan_kind=plan_source.kind if plan_source else "gigalphex",
+        plan_source=plan_source.source_path if plan_source else None,
+        plan_context_files=plan_source.context_paths if plan_source else (),
     )
 
     exit_code = 0
@@ -711,6 +765,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             not args.dry_run
             and cfg.move_plan_on_completion
             and plan_file is not None
+            and not (plan_source and plan_source.is_openspec)
             and not args.review
             and not args.tasks_only
         ):
@@ -721,6 +776,17 @@ def main(argv: Optional[list[str]] = None) -> int:
                 message = completed_plan_commit_message(plan_file, args.jira_task)
                 git.commit_paths([plan_file, moved_to], message)
                 log.write(f"committed completed plan move: {message}\n")
+        if (
+            not args.dry_run
+            and plan_source is not None
+            and plan_source.is_openspec
+            and not parse_plan_file(plan_file, plan_format="openspec").has_uncompleted_tasks()
+        ):
+            log.section("OpenSpec")
+            log.write(f"change complete: {plan_source.name}\n")
+            log.write(f"ready to archive with: openspec archive {plan_source.name}\n")
+            print(f"OpenSpec change complete: {plan_source.name}")
+            print(f"ready to archive with: openspec archive {plan_source.name}")
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         exit_code = 130

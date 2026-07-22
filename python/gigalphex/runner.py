@@ -47,6 +47,9 @@ class RunOptions:
     delay_seconds: float = 1.0
     prompts: PromptTemplates = field(default_factory=lambda: DEFAULT_PROMPTS)
     jira_task: str = ""
+    plan_kind: str = "gigalphex"
+    plan_source: Optional[Path] = None
+    plan_context_files: tuple[Path, ...] = ()
 
 
 class Runner:
@@ -91,10 +94,11 @@ class Runner:
             return
 
         for iteration in range(1, self.options.max_iterations + 1):
-            selected_task = parse_plan_file(self.options.plan_file).first_uncompleted_task()
+            selected_task = self._parse_plan_file().first_uncompleted_task()
             if selected_task is None:
                 return
             plan_before = self.options.plan_file.read_text(encoding="utf-8")
+            context_before = self._plan_context_snapshot()
             head_before = self._git().head_commit()
             dirty_before = self._uncommitted_paths()
             prompt = render_task_prompt(
@@ -112,6 +116,7 @@ class Runner:
                     lambda _result: self._prepare_task_retry(
                         selected_task,
                         plan_before,
+                        context_before,
                         head_before,
                         dirty_before,
                     )
@@ -121,6 +126,7 @@ class Runner:
                 if not self._task_iteration_completed_cleanly(
                     selected_task,
                     plan_before,
+                    context_before,
                     head_before,
                     dirty_before,
                 ):
@@ -156,6 +162,7 @@ class Runner:
             self._validate_completed_task_iteration(
                 selected_task,
                 plan_before,
+                context_before,
                 head_before,
                 dirty_before,
             )
@@ -260,7 +267,7 @@ class Runner:
         if not self.options.review_only:
             self.log.section("task prompt")
             selected_task = (
-                parse_plan_file(self.options.plan_file).first_uncompleted_task()
+                self._parse_plan_file().first_uncompleted_task()
                 if self.options.plan_file is not None
                 else None
             )
@@ -300,17 +307,27 @@ class Runner:
             progress_file=self.options.progress_file,
             default_branch=self.options.default_branch,
             jira_task=self.options.jira_task,
+            plan_kind=self.options.plan_kind,
+            plan_source=self.options.plan_source,
+            plan_context_files=self.options.plan_context_files,
+        )
+
+    def _parse_plan_file(self) -> Plan:
+        assert self.options.plan_file is not None
+        return parse_plan_file(
+            self.options.plan_file,
+            plan_format=self.options.plan_kind,
         )
 
     def _validate_plan_has_tasks(self) -> None:
         assert self.options.plan_file is not None
-        plan = parse_plan_file(self.options.plan_file)
+        plan = self._parse_plan_file()
         if not plan.tasks:
             raise ValueError(f"plan file has no executable task sections: {self.options.plan_file}")
 
     def _has_uncompleted_work(self) -> bool:
         assert self.options.plan_file is not None
-        plan = parse_plan_file(self.options.plan_file)
+        plan = self._parse_plan_file()
         if plan.tasks:
             return plan.has_uncompleted_tasks()
         return file_has_uncompleted_checkbox(self.options.plan_file)
@@ -319,17 +336,24 @@ class Runner:
         self,
         selected_task: Task,
         plan_before: str,
+        context_before: dict[Path, bytes],
         head_before: str,
         dirty_before: set[Path],
     ) -> None:
         assert self.options.plan_file is not None
-        plan = parse_plan_file(self.options.plan_file)
+        plan = self._parse_plan_file()
         completed_task = self._matching_task(plan, selected_task)
         if completed_task is None or not completed_task.complete:
             raise RuntimeError(
                 f"task {self._task_label(selected_task)} did not complete its selected plan section"
             )
         self._validate_later_tasks_unchanged(selected_task, plan_before, plan)
+        changed_context = self._changed_plan_context(context_before)
+        if changed_context:
+            paths = ", ".join(self._display_path(path) for path in changed_context)
+            raise RuntimeError(
+                f"task {self._task_label(selected_task)} modified read-only plan context: {paths}"
+            )
 
         git = self._git()
         if git.head_commit() == head_before:
@@ -352,18 +376,28 @@ class Runner:
         self,
         selected_task: Task,
         plan_before: str,
+        context_before: dict[Path, bytes],
         head_before: str,
         dirty_before: set[Path],
     ) -> bool:
         if self._task_iteration_completed_cleanly(
             selected_task,
             plan_before,
+            context_before,
             head_before,
             dirty_before,
         ):
             self.log.diagnostic(
                 "session=task event=retry_guard_rejected "
                 f"task={self._task_label(selected_task)!r} reason=committed_task_completion"
+            )
+            return False
+
+        changed_context = self._changed_plan_context(context_before)
+        if changed_context:
+            self.log.diagnostic(
+                "session=task event=retry_guard_rejected "
+                f"task={self._task_label(selected_task)!r} reason=read_only_context_modified"
             )
             return False
 
@@ -400,11 +434,12 @@ class Runner:
         self,
         selected_task: Task,
         plan_before: str,
+        context_before: dict[Path, bytes],
         head_before: str,
         dirty_before: set[Path],
     ) -> bool:
         assert self.options.plan_file is not None
-        plan = parse_plan_file(self.options.plan_file)
+        plan = self._parse_plan_file()
         completed_task = self._matching_task(plan, selected_task)
         task_complete = completed_task is not None and completed_task.complete
         later_tasks_unchanged = self._later_tasks_unchanged(
@@ -415,6 +450,7 @@ class Runner:
         return (
             task_complete
             and later_tasks_unchanged
+            and not self._changed_plan_context(context_before)
             and self._git().head_commit() != head_before
             and not (self._uncommitted_paths() - dirty_before)
         )
@@ -455,6 +491,34 @@ class Runner:
         matches = plan.tasks_matching(selected_task.number, selected_task.title)
         return matches[0] if len(matches) == 1 else None
 
+    def _plan_context_snapshot(self) -> dict[Path, bytes]:
+        if self.options.plan_kind != "openspec" or self.options.plan_source is None:
+            return {}
+        assert self.options.plan_file is not None
+        return {
+            path: path.read_bytes()
+            for path in self.options.plan_source.rglob("*")
+            if path.is_file() and path != self.options.plan_file
+        }
+
+    def _changed_plan_context(self, before: dict[Path, bytes]) -> list[Path]:
+        if not before and self.options.plan_kind != "openspec":
+            return []
+        assert self.options.plan_file is not None
+        assert self.options.plan_source is not None
+        current_paths = {
+            path
+            for path in self.options.plan_source.rglob("*")
+            if path.is_file() and path != self.options.plan_file
+        }
+        changed = set(before) ^ current_paths
+        changed.update(
+            path
+            for path in set(before) & current_paths
+            if path.read_bytes() != before[path]
+        )
+        return sorted(changed)
+
     def _validate_later_tasks_unchanged(
         self,
         selected_task: Task,
@@ -472,7 +536,7 @@ class Runner:
         plan_before: str,
         plan_after: Plan,
     ) -> bool:
-        before = parse_plan(plan_before)
+        before = parse_plan(plan_before, plan_format=self.options.plan_kind)
         selected_matches = [
             index
             for index, task in enumerate(before.tasks)

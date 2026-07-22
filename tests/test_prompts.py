@@ -105,6 +105,31 @@ class PromptTemplatesTest(unittest.TestCase):
         self.assertIn("must start exactly with `PROJ-123 `", prompt)
         self.assertIn("PROJ-123 feat: implement selected task", prompt)
 
+    def test_openspec_task_prompt_lists_read_only_change_context(self) -> None:
+        prompt = render_task_prompt(
+            DEFAULT_PROMPTS.task,
+            PromptContext(
+                Path("openspec/changes/add-search/tasks.md"),
+                Path("progress.txt"),
+                "main",
+                plan_kind="openspec",
+                plan_source=Path("openspec/changes/add-search"),
+                plan_context_files=(
+                    Path("openspec/changes/add-search/proposal.md"),
+                    Path("openspec/changes/add-search/specs/search/spec.md"),
+                ),
+            ),
+            1,
+            "Build search",
+            "## 1. Build search\n- [ ] 1.1 Implement it",
+        )
+
+        self.assertIn("OpenSpec change context", prompt)
+        self.assertIn("openspec/changes/add-search/proposal.md", prompt)
+        self.assertIn("openspec/changes/add-search/specs/search/spec.md", prompt)
+        self.assertIn("only writable OpenSpec artifact", prompt)
+        self.assertIn("remain read-only", prompt)
+
     def test_custom_task_prompt_also_gets_mandatory_task_binding(self) -> None:
         prompt = render_task_prompt(
             "Выполни план {plan_file}.",

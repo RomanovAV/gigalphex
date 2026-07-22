@@ -71,6 +71,25 @@ PYTHONPATH=python python3 -m gigalphex.cli \
   docs/superpowers/plans/2026-07-01-demo.md
 ```
 
+Standard local OpenSpec `spec-driven` changes can be executed with an explicit
+change-directory flag:
+
+```bash
+PYTHONPATH=python python3 -m gigalphex.cli \
+  --openspec openspec/changes/add-dark-mode
+```
+
+GigaLphex uses the change's `tasks.md` as the writable checklist and provides
+`proposal.md`, `design.md`, and all `specs/**/*.md` delta specs to each task
+agent as read-only context. Each `## N. ...` group in `tasks.md` is one agent
+iteration and one commit. Branch and progress names come from the change
+directory rather than the generic `tasks.md` filename.
+
+Completing an OpenSpec run does not move `tasks.md` or archive the change.
+GigaLphex prints the corresponding `openspec archive <change-name>` command so
+the spec merge and archive remain an explicit OpenSpec lifecycle action.
+Archived changes and changes without `tasks.md` are rejected.
+
 Install the bundled Superpowers conversion skill when you want to turn a
 Superpowers design spec into a plan, or normalize a plan by removing
 Superpowers-specific execution mechanics:
