@@ -100,6 +100,11 @@ agent as read-only context. Each `## N. ...` group in `tasks.md` is one agent
 iteration and one commit. Branch and progress names come from the change
 directory rather than the generic `tasks.md` filename.
 
+Localized prose-only task sections such as `## Задача 1: ...` are also
+supported when an OpenSpec generator omits checkboxes. They start as pending;
+after completing a section, the task agent adds a durable
+`- [x] N. <title>` marker below its heading so later runs can resume safely.
+
 Completing an OpenSpec run does not move `tasks.md` or archive the change.
 GigaLphex prints the corresponding `openspec archive <change-name>` command so
 the spec merge and archive remain an explicit OpenSpec lifecycle action.

@@ -493,6 +493,71 @@ class RunnerTest(unittest.TestCase):
 
             self.assertEqual(2, len(prompts))
 
+    def test_runs_localized_openspec_prose_tasks_and_adds_completion_markers(self) -> None:
+        with temporary_repo() as (repo, _legacy_plan):
+            change = repo / "openspec/changes/add-search"
+            change.mkdir(parents=True)
+            tasks = change / "tasks.md"
+            tasks.write_text(
+                """# Задачи: поиск
+
+## Задача 1: Реализовать поиск
+
+Изменить сервис поиска.
+
+## Задача 2: Написать тесты
+
+Проверить новый сценарий.
+""",
+                encoding="utf-8",
+            )
+            git(repo, "add", str(change))
+            git(repo, "commit", "-m", "docs: add prose OpenSpec tasks")
+            prompts: list[str] = []
+
+            def complete_selected(prompt):
+                prompts.append(prompt)
+                content = tasks.read_text(encoding="utf-8")
+                if len(prompts) == 1:
+                    marker = "- [x] 1. Реализовать поиск\n"
+                    content = content.replace(
+                        "## Задача 1: Реализовать поиск\n",
+                        f"## Задача 1: Реализовать поиск\n{marker}",
+                    )
+                    self.assertIn(f"`{marker.strip()}`", prompt)
+                    self.assertNotIn("- [x] 2. Написать тесты", content)
+                else:
+                    marker = "- [x] 2. Написать тесты\n"
+                    content = content.replace(
+                        "## Задача 2: Написать тесты\n",
+                        f"## Задача 2: Написать тесты\n{marker}",
+                    )
+                    self.assertIn(f"`{marker.strip()}`", prompt)
+                tasks.write_text(content, encoding="utf-8")
+                git(repo, "add", str(tasks))
+                git(repo, "commit", "-m", f"feat: complete prose task {len(prompts)}")
+                return ExecResult(output="implemented\n", returncode=0)
+
+            runner = Runner(
+                RunOptions(
+                    plan_file=tasks,
+                    progress_file=repo / "progress.txt",
+                    tasks_only=True,
+                    finalize_enabled=False,
+                    delay_seconds=0,
+                    plan_kind="openspec",
+                    plan_source=change,
+                ),
+                CallbackExecutor(complete_selected),  # type: ignore[arg-type]
+                ProgressLog(repo / "progress.txt"),
+            )
+
+            runner.run_tasks()
+
+            self.assertEqual(2, len(prompts))
+            self.assertIn("- [x] 1. Реализовать поиск", tasks.read_text(encoding="utf-8"))
+            self.assertIn("- [x] 2. Написать тесты", tasks.read_text(encoding="utf-8"))
+
     def test_openspec_task_rejects_changes_to_read_only_artifacts(self) -> None:
         with temporary_repo() as (repo, _legacy_plan):
             change = repo / "openspec/changes/add-search"

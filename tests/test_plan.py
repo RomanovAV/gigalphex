@@ -166,6 +166,39 @@ example
         self.assertEqual(plan.tasks[0], plan.first_uncompleted_task())
         self.assertEqual([], parse_plan(content).tasks)
 
+    def test_parses_localized_openspec_prose_tasks_as_pending_work(self) -> None:
+        content = """# Задачи: изменение проверки
+
+## Задача 1: Добавить метод
+
+**Файл:** `Adapter.java`
+
+Добавить новый метод интерфейса.
+
+## Задача 2: Написать тесты
+
+Создать unit-тесты.
+"""
+
+        plan = parse_plan(content, plan_format="openspec")
+
+        self.assertEqual([1, 2], [task.number for task in plan.tasks])
+        self.assertEqual(["Добавить метод", "Написать тесты"], [task.title for task in plan.tasks])
+        self.assertTrue(plan.tasks[0].has_implicit_tracking)
+        self.assertTrue(plan.tasks[1].has_implicit_tracking)
+        self.assertEqual(plan.tasks[0], plan.first_uncompleted_task())
+        self.assertIn("**Файл:** `Adapter.java`", plan.tasks[0].section)
+
+    def test_explicit_completion_marker_completes_openspec_prose_task(self) -> None:
+        plan = parse_plan(
+            "## Задача 1: Добавить метод\n- [x] 1. Добавить метод\n",
+            plan_format="openspec",
+        )
+
+        self.assertFalse(plan.tasks[0].has_implicit_tracking)
+        self.assertTrue(plan.tasks[0].complete)
+        self.assertIsNone(plan.first_uncompleted_task())
+
     def test_resolves_openspec_change_and_collects_context_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             change = Path(tmp) / "openspec/changes/add-search"

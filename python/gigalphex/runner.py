@@ -112,6 +112,7 @@ class Runner:
                 selected_task.number,
                 selected_task.title,
                 selected_task.section,
+                selected_task.has_implicit_tracking,
             )
             task_label = self._task_label(selected_task)
             if self.dashboard is not None:
@@ -298,6 +299,7 @@ class Runner:
                         selected_task.number,
                         selected_task.title,
                         selected_task.section,
+                        selected_task.has_implicit_tracking,
                     )
                 )
                 self.log.stream("\n")

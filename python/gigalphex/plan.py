@@ -22,6 +22,7 @@ FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*\r?$")
 class Checkbox:
     text: str
     checked: bool
+    implicit: bool = False
 
     @property
     def actionable(self) -> bool:
@@ -41,6 +42,10 @@ class Task:
 
     def has_uncompleted_actionable_work(self) -> bool:
         return any(not cb.checked and cb.actionable for cb in self.checkboxes)
+
+    @property
+    def has_implicit_tracking(self) -> bool:
+        return any(cb.implicit for cb in self.checkboxes)
 
 
 @dataclass
@@ -118,6 +123,21 @@ def parse_plan(content: str, *, plan_format: str = "gigalphex") -> Plan:
     current_lines: list[str] = []
     fence = FenceTracker()
 
+    def finish_current_task() -> None:
+        nonlocal current, current_lines
+        if current is None:
+            return
+        current.section = "\n".join(current_lines).rstrip()
+        if plan_format == "openspec" and not current.checkboxes:
+            current.checkboxes.append(
+                Checkbox(
+                    text=f"{current.number}. {current.title}",
+                    checked=False,
+                    implicit=True,
+                )
+            )
+        plan.tasks.append(current)
+
     for line in content.splitlines():
         if fence.skip(line):
             if current is not None:
@@ -131,14 +151,13 @@ def parse_plan(content: str, *, plan_format: str = "gigalphex") -> Plan:
                 continue
 
         task_match = (
-            OPENSPEC_TASK_HEADER_RE.match(line)
+            OPENSPEC_TASK_HEADER_RE.match(line) or TASK_HEADER_RE.match(line)
             if plan_format == "openspec"
             else TASK_HEADER_RE.match(line)
         )
         if task_match:
             if current is not None:
-                current.section = "\n".join(current_lines).rstrip()
-                plan.tasks.append(current)
+                finish_current_task()
             current = Task(number=parse_task_number(task_match.group(1)), title=task_match.group(2).strip())
             current_lines = [line]
             continue
@@ -146,8 +165,7 @@ def parse_plan(content: str, *, plan_format: str = "gigalphex") -> Plan:
         is_h2 = line.startswith("##") and not line.startswith("###")
         is_h1_after_title = line.startswith("#") and plan.title and not line.startswith("##")
         if current is not None and (is_h2 or is_h1_after_title):
-            current.section = "\n".join(current_lines).rstrip()
-            plan.tasks.append(current)
+            finish_current_task()
             current = None
             current_lines = []
             continue
@@ -164,8 +182,7 @@ def parse_plan(content: str, *, plan_format: str = "gigalphex") -> Plan:
                 )
 
     if current is not None:
-        current.section = "\n".join(current_lines).rstrip()
-        plan.tasks.append(current)
+        finish_current_task()
     return plan
 
 

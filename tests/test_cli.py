@@ -184,6 +184,28 @@ class CliTest(unittest.TestCase):
             self.assertIn(str(spec), output)
             self.assertIn("progress-add-search.txt", output)
 
+    def test_openspec_dry_run_accepts_localized_prose_tasks_without_checkboxes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            change = Path(tmp) / "openspec/changes/rko-check"
+            change.mkdir(parents=True)
+            (change / "tasks.md").write_text(
+                """# Задачи: изменение проверки
+
+## Задача 1: Добавить метод
+
+Изменить интерфейс адаптера.
+""",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                code = main(["--openspec", str(change), "--dry-run"])
+
+            self.assertEqual(0, code)
+            self.assertIn("Selected task identity: 1: Добавить метод", stdout.getvalue())
+            self.assertIn("`- [x] 1. Добавить метод`", stdout.getvalue())
+
     def test_completed_openspec_change_is_not_moved_and_prints_archive_hint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

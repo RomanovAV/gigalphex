@@ -130,6 +130,26 @@ class PromptTemplatesTest(unittest.TestCase):
         self.assertIn("only writable OpenSpec artifact", prompt)
         self.assertIn("remain read-only", prompt)
 
+    def test_openspec_prose_task_prompt_requires_explicit_completion_marker(self) -> None:
+        prompt = render_task_prompt(
+            DEFAULT_PROMPTS.task,
+            PromptContext(
+                Path("openspec/changes/add-search/tasks.md"),
+                Path("progress.txt"),
+                "main",
+                plan_kind="openspec",
+                plan_source=Path("openspec/changes/add-search"),
+            ),
+            3,
+            "Изменить логику",
+            "## Задача 3: Изменить логику\nОписание реализации.",
+            True,
+        )
+
+        self.assertIn("generated without a checkbox", prompt)
+        self.assertIn("`- [x] 3. Изменить логику`", prompt)
+        self.assertIn("immediately below its heading", prompt)
+
     def test_custom_task_prompt_also_gets_mandatory_task_binding(self) -> None:
         prompt = render_task_prompt(
             "Выполни план {plan_file}.",
