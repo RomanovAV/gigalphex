@@ -12,6 +12,8 @@ GigaCode, проверяет результат, отмечает выполне
 Нужны git-репозиторий и установленный, авторизованный `gigacode`. Команды ниже
 запускайте из корня проекта, который хотите изменить:
 
+[Скачать GigaLphex с GitHub](https://github.com/RomanovAV/gigalphex/archive/refs/heads/main.zip).
+
 ```bash
 command -v gigacode
 PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli --init

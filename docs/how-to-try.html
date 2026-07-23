@@ -251,6 +251,34 @@
     .check-card strong { margin-bottom: 3px; font-size: 14px; }
     .check-card small { color: var(--muted); font-size: 12px; }
 
+    .download-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin: -18px 0 30px;
+      padding: 14px 17px;
+      border: 1px dashed #b7c0b9;
+      border-radius: 11px;
+      background: #fbfcf8;
+      color: var(--ink);
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    .download-card span:first-child {
+      color: var(--muted);
+    }
+
+    .download-card strong {
+      white-space: nowrap;
+    }
+
+    .download-card:hover {
+      border-color: var(--ink);
+      background: white;
+    }
+
     .fields {
       display: grid;
       gap: 17px;
@@ -673,7 +701,7 @@
             <div class="heading">
               <p class="eyebrow">Шаг 01</p>
               <h2>Подготовьте окружение</h2>
-              <span>Страница ничего не устанавливает. Отметьте то, что уже готово на вашей машине.</span>
+              <span>Страница ничего не устанавливает. Чекбоксы — это подсказка, их можно пропустить.</span>
             </div>
 
             <div class="check-list">
@@ -686,6 +714,11 @@
                 <span><strong>Проект находится в Git</strong><small>Для первого прогона рабочее дерево лучше очистить</small></span>
               </label>
             </div>
+
+            <a class="download-card" href="https://github.com/RomanovAV/gigalphex/archive/refs/heads/main.zip" target="_blank" rel="noreferrer">
+              <span>GigaLphex ещё не скачан?</span>
+              <strong>Скачать с GitHub ↓</strong>
+            </a>
 
             <div class="fields two">
               <label>
@@ -805,7 +838,7 @@
         <div class="actions">
           <button class="secondary" id="backButton" hidden>← Назад</button>
           <span id="actionSpacer"></span>
-          <button class="primary" id="nextButton" disabled>Продолжить <span>→</span></button>
+          <button class="primary" id="nextButton">Продолжить <span>→</span></button>
         </div>
       </section>
 
@@ -942,7 +975,7 @@
         byId("backButton").hidden = state.step === 1;
         byId("actionSpacer").hidden = state.step > 1;
         byId("nextButton").hidden = state.step === 4;
-        byId("nextButton").disabled = state.step === 1 && !(byId("gigacodeReady").checked && byId("gitReady").checked);
+        byId("nextButton").disabled = false;
         byId("worktreeToggle").classList.toggle("enabled", state.worktree);
         byId("worktreeToggle").setAttribute("aria-pressed", String(state.worktree));
 
