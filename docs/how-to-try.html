@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Интерактивная настройка GigaLphex для OpenSpec, Superpowers и обычного плана.">
+  <title>Как попробовать GigaLphex</title>
+  <style>
+    :root {
+      --ink: #18251d;
+      --muted: #66716a;
+      --line: #dfe3dd;
+      --paper: #f4f3ed;
+      --card: #fffef9;
+      --acid: #d9ff43;
+      --terminal: #112118;
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 7%, rgba(217, 255, 67, .32), transparent 25rem),
+        var(--paper);
+      color: var(--ink);
+    }
+
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 3px solid rgba(24, 37, 29, .24);
+      outline-offset: 3px;
+    }
+
+    .shell {
+      width: min(1380px, calc(100% - 64px));
+      margin: 0 auto;
+    }
+
+    header {
+      min-height: 78px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(24, 37, 29, .16);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--acid);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .repo-link {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .repo-link:hover {
+      color: var(--ink);
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.7fr .7fr;
+      gap: 64px;
+      align-items: end;
+      padding: 70px 0 58px;
+    }
+
+    .kicker, .eyebrow {
+      margin: 0 0 15px;
+      color: #5c6a61;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(50px, 6.3vw, 92px);
+      font-weight: 650;
+      letter-spacing: -.07em;
+      line-height: .93;
+    }
+
+    h1 span {
+      color: #6f7b73;
+      font-weight: 430;
+    }
+
+    .hero-copy {
+      max-width: 350px;
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 16px 16px 0 0;
+      overflow: hidden;
+    }
+
+    .step-tab {
+      min-height: 66px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 22px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 254, 249, .64);
+      color: #89928c;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: left;
+    }
+
+    .step-tab:last-child { border-right: 0; }
+    .step-tab span {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+    }
+
+    .step-tab.active {
+      background: var(--ink);
+      color: white;
+    }
+
+    .step-tab.active span { color: var(--acid); }
+    .step-tab.done { color: var(--ink); }
+
+    .step-tab.done span {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--acid);
+    }
+
+    .step-tab:disabled { cursor: default; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(390px, .85fr);
+      border: 1px solid var(--line);
+      border-top: 0;
+      border-radius: 0 0 20px 20px;
+      background: var(--card);
+      box-shadow: 0 28px 70px rgba(33, 46, 38, .09);
+      overflow: hidden;
+    }
+
+    .wizard {
+      min-height: 680px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      border-right: 1px solid var(--line);
+    }
+
+    .step-panel {
+      display: none;
+      padding: 46px;
+    }
+
+    .step-panel.active { display: block; }
+
+    .heading {
+      max-width: 650px;
+      margin-bottom: 34px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: clamp(31px, 3vw, 45px);
+      font-weight: 640;
+      letter-spacing: -.05em;
+      line-height: 1;
+    }
+
+    .heading > span {
+      display: block;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .check-card {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+    }
+
+    .check-card:has(input:checked) {
+      border-color: #b9dc29;
+      background: #f8ffd9;
+    }
+
+    .check-card input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--ink);
+    }
+
+    .check-card strong, .check-card small { display: block; }
+    .check-card strong { margin-bottom: 3px; font-size: 14px; }
+    .check-card small { color: var(--muted); font-size: 12px; }
+
+    .fields {
+      display: grid;
+      gap: 17px;
+    }
+
+    .fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    label {
+      display: grid;
+      gap: 8px;
+    }
+
+    label > span, .field-label {
+      color: #4e5a52;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid #d8ddd7;
+      border-radius: 9px;
+      background: #fbfcf8;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    input { height: 44px; padding: 0 12px; }
+    textarea { min-height: 84px; padding: 12px; resize: vertical; line-height: 1.5; }
+    input::placeholder { color: #a4aca6; }
+
+    .routes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .route-card {
+      min-height: 245px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: white;
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .route-card:hover { border-color: #aab5ac; transform: translateY(-1px); }
+
+    .route-card.selected {
+      border-color: var(--ink);
+      box-shadow: inset 0 0 0 1px var(--ink);
+    }
+
+    .route-number {
+      width: 29px;
+      height: 29px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 23px;
+      border-radius: 50%;
+      background: #eef0eb;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9px;
+    }
+
+    .route-card.selected .route-number { background: var(--acid); }
+    .route-card small {
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+
+    .route-card strong {
+      margin-bottom: 8px;
+      font-size: 19px;
+      letter-spacing: -.03em;
+    }
+
+    .route-card p {
+      flex: 1;
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .route-card code {
+      max-width: 100%;
+      color: #4f5d54;
+      font-size: 9px;
+      overflow-wrap: anywhere;
+    }
+
+    .subchoice {
+      display: none;
+      gap: 5px;
+      margin: 0 0 15px;
+      padding: 4px;
+      border-radius: 9px;
+      background: #eef0eb;
+    }
+
+    .subchoice.visible { display: flex; }
+
+    .subchoice button {
+      flex: 1;
+      min-height: 37px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .subchoice button.selected {
+      background: white;
+      color: var(--ink);
+      box-shadow: 0 1px 4px rgba(24, 37, 29, .09);
+    }
+
+    .settings {
+      margin-bottom: 19px;
+      padding: 19px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .settings-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: baseline;
+      margin-bottom: 17px;
+    }
+
+    .settings-title strong { font-size: 13px; }
+    .settings-title small { color: var(--muted); font-size: 10px; }
+
+    .toggle-card {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 19px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .toggle-card strong, .toggle-card small { display: block; }
+    .toggle-card strong { margin-bottom: 3px; font-size: 13px; }
+    .toggle-card small { color: var(--muted); font-size: 11px; }
+
+    .switch {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      padding: 3px;
+      border-radius: 99px;
+      background: #d6dbd5;
+    }
+
+    .switch::after {
+      content: "";
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 1px 3px rgba(24, 37, 29, .2);
+      transition: transform .16s ease;
+    }
+
+    .toggle-card.enabled .switch { background: var(--ink); }
+    .toggle-card.enabled .switch::after {
+      transform: translateX(18px);
+      background: var(--acid);
+    }
+
+    .success {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 24px;
+      border-radius: 50%;
+      background: var(--acid);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr .7fr;
+      margin-bottom: 27px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .summary div { padding: 16px; border-right: 1px solid var(--line); }
+    .summary div:last-child { border-right: 0; }
+    .summary small, .summary strong { display: block; }
+    .summary small {
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 9px;
+      text-transform: uppercase;
+    }
+    .summary strong { font-size: 13px; }
+
+    .after {
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+    }
+
+    .after b { color: var(--ink); font-family: inherit; }
+
+    .actions {
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 46px;
+      border-top: 1px solid var(--line);
+    }
+
+    .primary, .secondary {
+      min-height: 43px;
+      padding: 0 18px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .primary {
+      display: flex;
+      align-items: center;
+      gap: 35px;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: white;
+    }
+
+    .primary span { color: var(--acid); }
+    .primary:disabled {
+      border-color: #d4d8d3;
+      background: #dfe2dd;
+      color: #909891;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+    }
+
+    .terminal {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: var(--terminal);
+      color: #dce9df;
+    }
+
+    .terminal-head {
+      min-height: 59px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 0 21px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+
+    .terminal-tabs { display: flex; gap: 4px; }
+    .terminal-tabs button, .copy {
+      border: 0;
+      background: transparent;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .terminal-tabs button {
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: #728479;
+    }
+
+    .terminal-tabs button.active {
+      background: rgba(255,255,255,.08);
+      color: white;
+    }
+
+    .copy { color: var(--acid); }
+
+    pre {
+      min-width: 0;
+      max-height: 630px;
+      min-height: 500px;
+      margin: 0;
+      padding: 27px 23px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    pre code {
+      color: #c8d7cc;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      line-height: 1.75;
+      overflow-wrap: anywhere;
+    }
+
+    .terminal-foot {
+      min-height: 47px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 21px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      color: #708176;
+      font-size: 9px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--acid);
+      box-shadow: 0 0 0 4px rgba(217, 255, 67, .08);
+    }
+
+    footer {
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    footer strong { color: var(--ink); }
+    footer a { color: var(--ink); text-decoration: none; }
+
+    @media (max-width: 1000px) {
+      .shell { width: min(100% - 36px, 900px); }
+      .hero { grid-template-columns: 1fr; gap: 25px; }
+      .workspace { grid-template-columns: 1fr; }
+      .wizard { border-right: 0; border-bottom: 1px solid var(--line); }
+      pre { min-height: 390px; }
+    }
+
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 24px, 600px); }
+      .hero { padding: 48px 0 40px; }
+      h1 { font-size: clamp(43px, 14vw, 66px); }
+      .step-tab { justify-content: center; padding: 0; font-size: 0; }
+      .step-tab span { font-size: 10px; }
+      .step-panel { padding: 29px 21px; }
+      .routes, .fields.two, .fields.four, .summary { grid-template-columns: 1fr; }
+      .summary div { border-right: 0; border-bottom: 1px solid var(--line); }
+      .summary div:last-child { border-bottom: 0; }
+      .settings-title { display: grid; }
+      .actions { padding: 0 21px; }
+      pre { min-height: 350px; padding: 21px 17px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="#top"><span class="brand-mark">G</span>GigaLphex</a>
+      <a class="repo-link" href="https://github.com/RomanovAV/gigalphex" target="_blank" rel="noreferrer">Репозиторий ↗</a>
+    </header>
+
+    <section class="hero" id="top">
+      <div>
+        <p class="kicker">От задачи до первого запуска</p>
+        <h1>Настройте GigaLphex<br><span>за четыре шага.</span></h1>
+      </div>
+      <p class="hero-copy">Выберите процесс, настройте исполнителей и получите команды, подходящие именно вашему проекту.</p>
+    </section>
+
+    <nav class="stepper" aria-label="Шаги настройки">
+      <button class="step-tab active" data-step-tab="1"><span>01</span>Подготовка</button>
+      <button class="step-tab" data-step-tab="2" disabled><span>02</span>Путь</button>
+      <button class="step-tab" data-step-tab="3" disabled><span>03</span>Настройки</button>
+      <button class="step-tab" data-step-tab="4" disabled><span>04</span>Запуск</button>
+    </nav>
+
+    <main class="workspace">
+      <section class="wizard">
+        <div>
+          <section class="step-panel active" data-panel="1">
+            <div class="heading">
+              <p class="eyebrow">Шаг 01</p>
+              <h2>Подготовьте окружение</h2>
+              <span>Страница ничего не устанавливает. Отметьте то, что уже готово на вашей машине.</span>
+            </div>
+
+            <div class="check-list">
+              <label class="check-card">
+                <input id="gigacodeReady" type="checkbox">
+                <span><strong>GigaCode установлен и авторизован</strong><small>Команда command -v gigacode возвращает путь</small></span>
+              </label>
+              <label class="check-card">
+                <input id="gitReady" type="checkbox">
+                <span><strong>Проект находится в Git</strong><small>Для первого прогона рабочее дерево лучше очистить</small></span>
+              </label>
+            </div>
+
+            <div class="fields two">
+              <label>
+                <span>Где находится GigaLphex</span>
+                <input id="runnerRoot" value="/path/to/gigalphex" spellcheck="false">
+              </label>
+              <label>
+                <span>Какой проект нужно изменить</span>
+                <input id="projectRoot" value="/path/to/target-project" spellcheck="false">
+              </label>
+            </div>
+          </section>
+
+          <section class="step-panel" data-panel="2">
+            <div class="heading">
+              <p class="eyebrow">Шаг 02</p>
+              <h2>С чего начинаем?</h2>
+              <span>Выбирайте по артефакту, который уже есть в проекте.</span>
+            </div>
+
+            <div class="routes">
+              <button class="route-card" data-route="openspec">
+                <span class="route-number">01</span>
+                <small>Есть change-директория</small>
+                <strong>OpenSpec</strong>
+                <p>Запустить tasks.md вместе с proposal, design и delta specs.</p>
+                <code>openspec/changes/…</code>
+              </button>
+              <button class="route-card" data-route="superpowers">
+                <span class="route-number">02</span>
+                <small>Есть spec или implementation plan</small>
+                <strong>Superpowers</strong>
+                <p>Выполнить готовый план напрямую или сначала конвертировать spec.</p>
+                <code>docs/superpowers/…</code>
+              </button>
+              <button class="route-card selected" data-route="plan">
+                <span class="route-number">03</span>
+                <small>Есть только формулировка задачи</small>
+                <strong>Обычный план</strong>
+                <p>Попросить GigaLphex создать план, проверить его и запустить.</p>
+                <code>docs/plans/…</code>
+              </button>
+            </div>
+
+            <div class="subchoice" id="superpowersChoice">
+              <button class="selected" data-super-source="plan">Готовый implementation plan</button>
+              <button data-super-source="spec">Только design spec</button>
+            </div>
+
+            <label id="requestField">
+              <span>Сформулируйте задачу</span>
+              <textarea id="request">добавить health check endpoint</textarea>
+            </label>
+
+            <label id="artifactField" hidden>
+              <span id="artifactLabel">Путь к артефакту</span>
+              <input id="artifactPath" value="docs/plans/20260723-add-health-check-endpoint.md" spellcheck="false">
+            </label>
+          </section>
+
+          <section class="step-panel" data-panel="3">
+            <div class="heading">
+              <p class="eyebrow">Шаг 03</p>
+              <h2>Настройте запуск</h2>
+              <span>Пустая модель означает стандартный выбор GigaCode. Числа ниже — безопасные стартовые значения.</span>
+            </div>
+
+            <div class="settings">
+              <div class="settings-title"><strong>Модели по фазам</strong><small>Можно использовать одну модель в нескольких полях</small></div>
+              <div class="fields two">
+                <label><span>Создание плана</span><input id="planModel" placeholder="по умолчанию"></label>
+                <label><span>Реализация и synthesis</span><input id="taskModel" placeholder="по умолчанию"></label>
+                <label><span>Ревью</span><input id="reviewModel" placeholder="модель реализации"></label>
+                <label><span>Финальная проверка</span><input id="finalizeModel" placeholder="модель ревью"></label>
+              </div>
+            </div>
+
+            <div class="settings">
+              <div class="settings-title"><strong>Лимиты и повторы</strong><small>Все значения времени указаны в секундах</small></div>
+              <div class="fields four">
+                <label><span>Вся сессия</span><input id="sessionTimeout" type="number" min="0" value="5000"></label>
+                <label><span>Без вывода</span><input id="idleTimeout" type="number" min="0" value="1800"></label>
+                <label><span>Ретраи</span><input id="retryCount" type="number" min="0" value="3"></label>
+                <label><span>Пауза</span><input id="retryDelay" type="number" min="0" value="5"></label>
+              </div>
+            </div>
+
+            <button class="toggle-card enabled" id="worktreeToggle" aria-pressed="true">
+              <span><strong>Запускать в отдельном worktree</strong><small>Для первого прогона текущий checkout останется свободным</small></span>
+              <span class="switch" aria-hidden="true"></span>
+            </button>
+          </section>
+
+          <section class="step-panel" data-panel="4">
+            <div class="success">✓</div>
+            <div class="heading">
+              <p class="eyebrow">Готово к запуску</p>
+              <h2>Ваш сценарий собран</h2>
+              <span>Скопируйте команды справа, выполните их по порядку и следите за прогрессом в .gigalphex/progress/.</span>
+            </div>
+
+            <div class="summary">
+              <div><small>Выбранный путь</small><strong id="summaryRoute">Обычный план</strong></div>
+              <div><small>Таймаут сессии</small><strong id="summaryTimeout">5000 сек.</strong></div>
+              <div><small>Повторов</small><strong id="summaryRetries">3</strong></div>
+            </div>
+
+            <div class="after">
+              <b>После запуска проверьте:</b>
+              <span>01 · dashboard и progress log в .gigalphex/progress/</span>
+              <span>02 · созданные коммиты через git log --oneline</span>
+              <span>03 · оставшиеся изменения через git status --short</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="actions">
+          <button class="secondary" id="backButton" hidden>← Назад</button>
+          <span id="actionSpacer"></span>
+          <button class="primary" id="nextButton" disabled>Продолжить <span>→</span></button>
+        </div>
+      </section>
+
+      <aside class="terminal" aria-label="Предпросмотр результата">
+        <div class="terminal-head">
+          <div class="terminal-tabs">
+            <button class="active" data-output="commands">Команды</button>
+            <button data-output="config">config</button>
+          </div>
+          <button class="copy" id="copyButton">Копировать</button>
+        </div>
+        <pre><code id="output"></code></pre>
+        <div class="terminal-foot"><span class="dot"></span>Обновляется вместе с настройками</div>
+      </aside>
+    </main>
+
+    <footer>
+      <strong>GigaLphex</strong>
+      <span>Планируйте. Выполняйте. Проверяйте.</span>
+      <a href="#top">Наверх ↑</a>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const state = { step: 1, route: "plan", superSource: "plan", output: "commands", worktree: true };
+      const routeNames = { openspec: "OpenSpec", superpowers: "Superpowers", plan: "Обычный план" };
+      const routePaths = {
+        openspec: "openspec/changes/add-dark-mode",
+        superpowers: "docs/superpowers/plans/2026-07-01-add-dark-mode.md",
+        plan: "docs/plans/20260723-add-health-check-endpoint.md"
+      };
+      const byId = (id) => document.getElementById(id);
+      const value = (id, fallback = "") => byId(id).value.trim() || fallback;
+      const quote = (text) => "'" + text.replaceAll("'", "'\"'\"'") + "'";
+      const joinCommand = (command, args) => args.length ? command + " \\\n  " + args.join(" \\\n  ") : command;
+
+      function buildOutput() {
+        const runner = value("runnerRoot", "/path/to/gigalphex").replace(/\/+$/, "");
+        const cli = "PYTHONPATH=" + quote(runner + "/python") + " python3 -m gigalphex.cli";
+        const taskModel = value("taskModel");
+        const reviewModel = value("reviewModel");
+        const finalizeModel = value("finalizeModel");
+        const executionArgs = [
+          taskModel ? "--task-model " + quote(taskModel) : "",
+          reviewModel ? "--review-model " + quote(reviewModel) : "",
+          finalizeModel ? "--finalize-model " + quote(finalizeModel) : "",
+          "--session-timeout " + value("sessionTimeout", "5000"),
+          "--idle-timeout " + value("idleTimeout", "1800"),
+          "--retry-count " + value("retryCount", "3"),
+          "--retry-delay " + value("retryDelay", "5"),
+          state.worktree ? "--worktree" : ""
+        ].filter(Boolean);
+
+        const commands = [
+          "# Перейдите в проект",
+          "cd " + quote(value("projectRoot", "/path/to/target-project")),
+          "",
+          "# Проверьте GigaCode и создайте локальную конфигурацию",
+          "command -v gigacode",
+          cli + " --init",
+          ""
+        ];
+
+        if (state.route === "openspec") {
+          commands.push("# Запустите OpenSpec change", joinCommand(cli + " --openspec " + quote(value("artifactPath", routePaths.openspec)), executionArgs));
+        } else if (state.route === "superpowers" && state.superSource === "plan") {
+          commands.push("# Выполните готовый Superpowers implementation plan", joinCommand(cli + " " + quote(value("artifactPath", routePaths.superpowers)), executionArgs));
+        } else if (state.route === "superpowers") {
+          const source = value("artifactPath", "docs/superpowers/specs/2026-07-01-add-dark-mode.md");
+          commands.push(
+            "# Один раз установите конвертер",
+            cli + " --install-superpowers-converter-skill",
+            "",
+            "# Откройте GigaCode и попросите конвертировать spec",
+            "gigacode",
+            "# Use the superpowers-to-gigalphex skill to convert " + source + " into docs/plans/CONVERTED_PLAN.md.",
+            "",
+            "# Затем выполните созданный план",
+            joinCommand(cli + " " + quote("docs/plans/CONVERTED_PLAN.md"), executionArgs)
+          );
+        } else {
+          const planArgs = ["--plan " + quote(value("request", "добавить health check endpoint"))];
+          const planModel = value("planModel");
+          if (planModel) planArgs.push("--plan-model " + quote(planModel));
+          commands.push(
+            "# Один раз установите skill планирования",
+            cli + " --install-planning-skill",
+            "",
+            "# Создайте план и проверьте файл в docs/plans/",
+            joinCommand(cli, planArgs),
+            "",
+            "# Подставьте имя созданного файла и запустите его",
+            joinCommand(cli + " " + quote("docs/plans/CREATED_PLAN.md"), executionArgs)
+          );
+        }
+
+        const config = [
+          "[gigalphex]",
+          value("planModel") ? "plan_model = " + value("planModel") : "# plan_model =",
+          taskModel ? "task_model = " + taskModel : "# task_model =",
+          reviewModel ? "review_model = " + reviewModel : "# review_model =",
+          finalizeModel ? "finalize_model = " + finalizeModel : "# finalize_model =",
+          "",
+          "session_timeout = " + value("sessionTimeout", "5000"),
+          "idle_timeout = " + value("idleTimeout", "1800"),
+          "retry_count = " + value("retryCount", "3"),
+          "retry_delay = " + value("retryDelay", "5"),
+          "worktree = " + (state.worktree ? "true" : "false")
+        ].join("\n");
+
+        return { commands: commands.join("\n"), config };
+      }
+
+      function render() {
+        document.querySelectorAll("[data-panel]").forEach((panel) => {
+          panel.classList.toggle("active", Number(panel.dataset.panel) === state.step);
+        });
+        document.querySelectorAll("[data-step-tab]").forEach((tab) => {
+          const tabStep = Number(tab.dataset.stepTab);
+          tab.classList.toggle("active", tabStep === state.step);
+          tab.classList.toggle("done", tabStep < state.step);
+          tab.disabled = tabStep > state.step;
+          tab.querySelector("span").textContent = tabStep < state.step ? "✓" : "0" + tabStep;
+        });
+        document.querySelectorAll("[data-route]").forEach((card) => card.classList.toggle("selected", card.dataset.route === state.route));
+        document.querySelectorAll("[data-super-source]").forEach((button) => button.classList.toggle("selected", button.dataset.superSource === state.superSource));
+        document.querySelectorAll("[data-output]").forEach((button) => button.classList.toggle("active", button.dataset.output === state.output));
+
+        byId("superpowersChoice").classList.toggle("visible", state.route === "superpowers");
+        byId("requestField").hidden = state.route !== "plan";
+        byId("artifactField").hidden = state.route === "plan";
+        byId("artifactLabel").textContent = state.route === "openspec" ? "Путь к OpenSpec change" : "Путь к Superpowers артефакту";
+        byId("backButton").hidden = state.step === 1;
+        byId("actionSpacer").hidden = state.step > 1;
+        byId("nextButton").hidden = state.step === 4;
+        byId("nextButton").disabled = state.step === 1 && !(byId("gigacodeReady").checked && byId("gitReady").checked);
+        byId("worktreeToggle").classList.toggle("enabled", state.worktree);
+        byId("worktreeToggle").setAttribute("aria-pressed", String(state.worktree));
+
+        byId("summaryRoute").textContent = routeNames[state.route];
+        byId("summaryTimeout").textContent = value("sessionTimeout", "5000") + " сек.";
+        byId("summaryRetries").textContent = value("retryCount", "3");
+
+        const output = buildOutput();
+        byId("output").textContent = output[state.output];
+      }
+
+      document.querySelectorAll("input, textarea").forEach((control) => control.addEventListener("input", render));
+      document.querySelectorAll("[data-step-tab]").forEach((tab) => tab.addEventListener("click", () => {
+        const target = Number(tab.dataset.stepTab);
+        if (target <= state.step) { state.step = target; render(); }
+      }));
+      document.querySelectorAll("[data-route]").forEach((card) => card.addEventListener("click", () => {
+        state.route = card.dataset.route;
+        byId("artifactPath").value = routePaths[state.route];
+        state.superSource = "plan";
+        render();
+      }));
+      document.querySelectorAll("[data-super-source]").forEach((button) => button.addEventListener("click", () => {
+        state.superSource = button.dataset.superSource;
+        byId("artifactPath").value = state.superSource === "plan"
+          ? routePaths.superpowers
+          : "docs/superpowers/specs/2026-07-01-add-dark-mode.md";
+        render();
+      }));
+      document.querySelectorAll("[data-output]").forEach((button) => button.addEventListener("click", () => {
+        state.output = button.dataset.output;
+        render();
+      }));
+      byId("worktreeToggle").addEventListener("click", () => { state.worktree = !state.worktree; render(); });
+      byId("nextButton").addEventListener("click", () => { if (state.step < 4) state.step += 1; render(); });
+      byId("backButton").addEventListener("click", () => { if (state.step > 1) state.step -= 1; render(); });
+      byId("copyButton").addEventListener("click", async () => {
+        const output = buildOutput()[state.output];
+        await navigator.clipboard.writeText(output);
+        byId("copyButton").textContent = "Скопировано ✓";
+        window.setTimeout(() => { byId("copyButton").textContent = "Копировать"; }, 1500);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -199,7 +199,11 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.diagnose \
   --plan docs/plans/my-feature.md
 ```
 
-For colleagues testing `gigalphex` on real tasks, see the short Russian guide:
+For a concise Russian introduction covering OpenSpec, Superpowers, and a
+regular markdown plan, see
+[`docs/how-to-try.md`](docs/how-to-try.md), or open the
+[`interactive setup page`](docs/how-to-try.html). For a more detailed real-task
+testing guide, see
 [`docs/real-task-testing-guide.md`](docs/real-task-testing-guide.md).
 
 Run a plan in a separate git worktree, close to ralphex `--worktree`
