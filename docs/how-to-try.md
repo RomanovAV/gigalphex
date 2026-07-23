@@ -89,51 +89,15 @@ PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli \
 Также план можно написать вручную: каждая задача должна иметь заголовок
 `### Task N:` или `### Задача N:` и чекбоксы `- [ ]`.
 
-## Настройка моделей, таймаутов и ретраев
+## Конфигурация
 
-Постоянные настройки проекта хранятся в `.gigalphex/config`, который создается
-командой `--init`. Например:
-
-```ini
-[gigalphex]
-plan_model = plan-model-name
-task_model = task-model-name
-review_model = review-model-name
-finalize_model = finalize-model-name
-
-session_timeout = 5000
-idle_timeout = 1800
-retry_count = 3
-retry_delay = 10
-```
-
-Таймауты и задержка задаются в секундах. `session_timeout` ограничивает полное
-время одной сессии GigaCode, `idle_timeout` — допустимое время без вывода,
-`retry_count` — количество повторов после неудачи, а `retry_delay` — паузу
-между ними.
-
-Для одного запуска те же значения можно переопределить флагами:
-
-```bash
-PYTHONPATH=/path/to/gigalphex/python python3 -m gigalphex.cli \
-  docs/plans/my-feature.md \
-  --task-model task-model-name \
-  --review-model review-model-name \
-  --session-timeout 5000 \
-  --idle-timeout 1800 \
-  --retry-count 3 \
-  --retry-delay 10
-```
-
-Также доступны `--plan-model` и `--finalize-model`. Значения из CLI имеют
-приоритет над `.gigalphex/config`.
+Команды выше намеренно не содержат необязательных параметров. GigaLphex читает
+общие настройки из `~/.config/gigalphex/config`, а проектные переопределения —
+из `.gigalphex/config`. Команда `--init` подготовит локальный config, если его
+ещё нет.
 
 ## Где смотреть результат
 
 - текущий статус и dashboard — в `.gigalphex/progress/`;
 - созданные коммиты — через `git log --oneline`;
 - оставшиеся изменения — через `git status --short`.
-
-По умолчанию GigaLphex создает ветку из имени плана. Для первого безопасного
-прогона можно добавить `--worktree`, чтобы выполнять работу в отдельном git
-worktree.

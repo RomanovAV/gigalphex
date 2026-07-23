@@ -285,7 +285,6 @@
     }
 
     .fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
     label {
       display: grid;
@@ -429,51 +428,6 @@
     .settings-title strong { font-size: 13px; }
     .settings-title small { color: var(--muted); font-size: 10px; }
 
-    .toggle-card {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 16px 19px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: white;
-      color: var(--ink);
-      text-align: left;
-    }
-
-    .toggle-card strong, .toggle-card small { display: block; }
-    .toggle-card strong { margin-bottom: 3px; font-size: 13px; }
-    .toggle-card small { color: var(--muted); font-size: 11px; }
-
-    .switch {
-      flex: 0 0 auto;
-      width: 42px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      padding: 3px;
-      border-radius: 99px;
-      background: #d6dbd5;
-    }
-
-    .switch::after {
-      content: "";
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: white;
-      box-shadow: 0 1px 3px rgba(24, 37, 29, .2);
-      transition: transform .16s ease;
-    }
-
-    .toggle-card.enabled .switch { background: var(--ink); }
-    .toggle-card.enabled .switch::after {
-      transform: translateX(18px);
-      background: var(--acid);
-    }
-
     .success {
       width: 48px;
       height: 48px;
@@ -574,23 +528,17 @@
       border-bottom: 1px solid rgba(255,255,255,.1);
     }
 
-    .terminal-tabs { display: flex; gap: 4px; }
-    .terminal-tabs button, .copy {
+    .terminal-head > strong {
+      font-size: 10px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .copy {
       border: 0;
       background: transparent;
       font-size: 10px;
       font-weight: 700;
-    }
-
-    .terminal-tabs button {
-      padding: 7px 10px;
-      border-radius: 6px;
-      color: #728479;
-    }
-
-    .terminal-tabs button.active {
-      background: rgba(255,255,255,.08);
-      color: white;
     }
 
     .copy { color: var(--acid); }
@@ -659,7 +607,7 @@
       .step-tab { justify-content: center; padding: 0; font-size: 0; }
       .step-tab span { font-size: 10px; }
       .step-panel { padding: 29px 21px; }
-      .routes, .fields.two, .fields.four, .summary { grid-template-columns: 1fr; }
+      .routes, .fields.two, .summary { grid-template-columns: 1fr; }
       .summary div { border-right: 0; border-bottom: 1px solid var(--line); }
       .summary div:last-child { border-bottom: 0; }
       .settings-title { display: grid; }
@@ -690,7 +638,7 @@
     <nav class="stepper" aria-label="Шаги настройки">
       <button class="step-tab active" data-step-tab="1"><span>01</span>Подготовка</button>
       <button class="step-tab" data-step-tab="2" disabled><span>02</span>Путь</button>
-      <button class="step-tab" data-step-tab="3" disabled><span>03</span>Настройки</button>
+      <button class="step-tab" data-step-tab="3" disabled><span>03</span>Конфигурация</button>
       <button class="step-tab" data-step-tab="4" disabled><span>04</span>Запуск</button>
     </nav>
 
@@ -782,34 +730,26 @@
           <section class="step-panel" data-panel="3">
             <div class="heading">
               <p class="eyebrow">Шаг 03</p>
-              <h2>Настройте запуск</h2>
-              <span>Пустая модель означает стандартный выбор GigaCode. Числа ниже — безопасные стартовые значения.</span>
+              <h2>Используйте общую конфигурацию</h2>
+              <span>Команда запуска останется короткой: GigaLphex сам прочитает модели и параметры выполнения из config.</span>
             </div>
 
             <div class="settings">
-              <div class="settings-title"><strong>Модели по фазам</strong><small>Можно использовать одну модель в нескольких полях</small></div>
-              <div class="fields two">
-                <label><span>Создание плана</span><input id="planModel" placeholder="по умолчанию"></label>
-                <label><span>Реализация и synthesis</span><input id="taskModel" placeholder="по умолчанию"></label>
-                <label><span>Ревью</span><input id="reviewModel" placeholder="модель реализации"></label>
-                <label><span>Финальная проверка</span><input id="finalizeModel" placeholder="модель ревью"></label>
+              <div class="settings-title"><strong>Откуда берутся настройки</strong><small>Флаги в каждой команде не нужны</small></div>
+              <div class="after">
+                <span><b>01 ·</b> ~/.config/gigalphex/config — общие настройки</span>
+                <span><b>02 ·</b> .gigalphex/config — настройки конкретного проекта</span>
+                <span><b>03 ·</b> проектный config при необходимости переопределяет общий</span>
               </div>
             </div>
 
             <div class="settings">
-              <div class="settings-title"><strong>Лимиты и повторы</strong><small>Все значения времени указаны в секундах</small></div>
-              <div class="fields four">
-                <label><span>Вся сессия</span><input id="sessionTimeout" type="number" min="0" value="5000"></label>
-                <label><span>Без вывода</span><input id="idleTimeout" type="number" min="0" value="1800"></label>
-                <label><span>Ретраи</span><input id="retryCount" type="number" min="0" value="3"></label>
-                <label><span>Пауза</span><input id="retryDelay" type="number" min="0" value="5"></label>
+              <div class="settings-title"><strong>Для первого запуска</strong><small>Дополнительная настройка не обязательна</small></div>
+              <div class="after">
+                <span>Команда <b>--init</b> подготовит .gigalphex/config.</span>
+                <span>Если config уже существует, GigaLphex использует его без изменений.</span>
               </div>
             </div>
-
-            <button class="toggle-card enabled" id="worktreeToggle" aria-pressed="true">
-              <span><strong>Запускать в отдельном worktree</strong><small>Для первого прогона текущий checkout останется свободным</small></span>
-              <span class="switch" aria-hidden="true"></span>
-            </button>
           </section>
 
           <section class="step-panel" data-panel="4">
@@ -822,8 +762,8 @@
 
             <div class="summary">
               <div><small>Выбранный путь</small><strong id="summaryRoute">Обычный план</strong></div>
-              <div><small>Таймаут сессии</small><strong id="summaryTimeout">5000 сек.</strong></div>
-              <div><small>Повторов</small><strong id="summaryRetries">3</strong></div>
+              <div><small>Настройки</small><strong>Из config</strong></div>
+              <div><small>Команда</small><strong>Без лишних флагов</strong></div>
             </div>
 
             <div class="after">
@@ -844,14 +784,11 @@
 
       <aside class="terminal" aria-label="Предпросмотр результата">
         <div class="terminal-head">
-          <div class="terminal-tabs">
-            <button class="active" data-output="commands">Команды</button>
-            <button data-output="config">config</button>
-          </div>
+          <strong>Команды</strong>
           <button class="copy" id="copyButton">Копировать</button>
         </div>
         <pre><code id="output"></code></pre>
-        <div class="terminal-foot"><span class="dot"></span>Обновляется вместе с настройками</div>
+        <div class="terminal-foot"><span class="dot"></span>Параметры выполнения читаются из config</div>
       </aside>
     </main>
 
@@ -864,7 +801,7 @@
 
   <script>
     (() => {
-      const state = { step: 1, route: "plan", superSource: "plan", output: "commands", worktree: true };
+      const state = { step: 1, route: "plan", superSource: "plan" };
       const routeNames = { openspec: "OpenSpec", superpowers: "Superpowers", plan: "Обычный план" };
       const routePaths = {
         openspec: "openspec/changes/add-dark-mode",
@@ -874,24 +811,10 @@
       const byId = (id) => document.getElementById(id);
       const value = (id, fallback = "") => byId(id).value.trim() || fallback;
       const quote = (text) => "'" + text.replaceAll("'", "'\"'\"'") + "'";
-      const joinCommand = (command, args) => args.length ? command + " \\\n  " + args.join(" \\\n  ") : command;
 
       function buildOutput() {
         const runner = value("runnerRoot", "/path/to/gigalphex").replace(/\/+$/, "");
         const cli = "PYTHONPATH=" + quote(runner + "/python") + " python3 -m gigalphex.cli";
-        const taskModel = value("taskModel");
-        const reviewModel = value("reviewModel");
-        const finalizeModel = value("finalizeModel");
-        const executionArgs = [
-          taskModel ? "--task-model " + quote(taskModel) : "",
-          reviewModel ? "--review-model " + quote(reviewModel) : "",
-          finalizeModel ? "--finalize-model " + quote(finalizeModel) : "",
-          "--session-timeout " + value("sessionTimeout", "5000"),
-          "--idle-timeout " + value("idleTimeout", "1800"),
-          "--retry-count " + value("retryCount", "3"),
-          "--retry-delay " + value("retryDelay", "5"),
-          state.worktree ? "--worktree" : ""
-        ].filter(Boolean);
 
         const commands = [
           "# Перейдите в проект",
@@ -904,9 +827,9 @@
         ];
 
         if (state.route === "openspec") {
-          commands.push("# Запустите OpenSpec change", joinCommand(cli + " --openspec " + quote(value("artifactPath", routePaths.openspec)), executionArgs));
+          commands.push("# Запустите OpenSpec change", cli + " --openspec " + quote(value("artifactPath", routePaths.openspec)));
         } else if (state.route === "superpowers" && state.superSource === "plan") {
-          commands.push("# Выполните готовый Superpowers implementation plan", joinCommand(cli + " " + quote(value("artifactPath", routePaths.superpowers)), executionArgs));
+          commands.push("# Выполните готовый Superpowers implementation plan", cli + " " + quote(value("artifactPath", routePaths.superpowers)));
         } else if (state.route === "superpowers") {
           const source = value("artifactPath", "docs/superpowers/specs/2026-07-01-add-dark-mode.md");
           commands.push(
@@ -918,39 +841,22 @@
             "# Use the superpowers-to-gigalphex skill to convert " + source + " into docs/plans/CONVERTED_PLAN.md.",
             "",
             "# Затем выполните созданный план",
-            joinCommand(cli + " " + quote("docs/plans/CONVERTED_PLAN.md"), executionArgs)
+            cli + " " + quote("docs/plans/CONVERTED_PLAN.md")
           );
         } else {
-          const planArgs = ["--plan " + quote(value("request", "добавить health check endpoint"))];
-          const planModel = value("planModel");
-          if (planModel) planArgs.push("--plan-model " + quote(planModel));
           commands.push(
             "# Один раз установите skill планирования",
             cli + " --install-planning-skill",
             "",
             "# Создайте план и проверьте файл в docs/plans/",
-            joinCommand(cli, planArgs),
+            cli + " --plan " + quote(value("request", "добавить health check endpoint")),
             "",
             "# Подставьте имя созданного файла и запустите его",
-            joinCommand(cli + " " + quote("docs/plans/CREATED_PLAN.md"), executionArgs)
+            cli + " " + quote("docs/plans/CREATED_PLAN.md")
           );
         }
 
-        const config = [
-          "[gigalphex]",
-          value("planModel") ? "plan_model = " + value("planModel") : "# plan_model =",
-          taskModel ? "task_model = " + taskModel : "# task_model =",
-          reviewModel ? "review_model = " + reviewModel : "# review_model =",
-          finalizeModel ? "finalize_model = " + finalizeModel : "# finalize_model =",
-          "",
-          "session_timeout = " + value("sessionTimeout", "5000"),
-          "idle_timeout = " + value("idleTimeout", "1800"),
-          "retry_count = " + value("retryCount", "3"),
-          "retry_delay = " + value("retryDelay", "5"),
-          "worktree = " + (state.worktree ? "true" : "false")
-        ].join("\n");
-
-        return { commands: commands.join("\n"), config };
+        return commands.join("\n");
       }
 
       function render() {
@@ -966,8 +872,6 @@
         });
         document.querySelectorAll("[data-route]").forEach((card) => card.classList.toggle("selected", card.dataset.route === state.route));
         document.querySelectorAll("[data-super-source]").forEach((button) => button.classList.toggle("selected", button.dataset.superSource === state.superSource));
-        document.querySelectorAll("[data-output]").forEach((button) => button.classList.toggle("active", button.dataset.output === state.output));
-
         byId("superpowersChoice").classList.toggle("visible", state.route === "superpowers");
         byId("requestField").hidden = state.route !== "plan";
         byId("artifactField").hidden = state.route === "plan";
@@ -976,15 +880,9 @@
         byId("actionSpacer").hidden = state.step > 1;
         byId("nextButton").hidden = state.step === 4;
         byId("nextButton").disabled = false;
-        byId("worktreeToggle").classList.toggle("enabled", state.worktree);
-        byId("worktreeToggle").setAttribute("aria-pressed", String(state.worktree));
 
         byId("summaryRoute").textContent = routeNames[state.route];
-        byId("summaryTimeout").textContent = value("sessionTimeout", "5000") + " сек.";
-        byId("summaryRetries").textContent = value("retryCount", "3");
-
-        const output = buildOutput();
-        byId("output").textContent = output[state.output];
+        byId("output").textContent = buildOutput();
       }
 
       document.querySelectorAll("input, textarea").forEach((control) => control.addEventListener("input", render));
@@ -1005,15 +903,10 @@
           : "docs/superpowers/specs/2026-07-01-add-dark-mode.md";
         render();
       }));
-      document.querySelectorAll("[data-output]").forEach((button) => button.addEventListener("click", () => {
-        state.output = button.dataset.output;
-        render();
-      }));
-      byId("worktreeToggle").addEventListener("click", () => { state.worktree = !state.worktree; render(); });
       byId("nextButton").addEventListener("click", () => { if (state.step < 4) state.step += 1; render(); });
       byId("backButton").addEventListener("click", () => { if (state.step > 1) state.step -= 1; render(); });
       byId("copyButton").addEventListener("click", async () => {
-        const output = buildOutput()[state.output];
+        const output = buildOutput();
         await navigator.clipboard.writeText(output);
         byId("copyButton").textContent = "Скопировано ✓";
         window.setTimeout(() => { byId("copyButton").textContent = "Копировать"; }, 1500);
